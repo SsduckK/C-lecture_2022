@@ -43,7 +43,7 @@ public:
         address_ = address;
         return this;
     }
-    void SetPhone(const std::string& phone) { phone_ = phone; }
+    void SetPhone(const std::string& phone) { phone_ = phone; } 
 };
 
 int main() {

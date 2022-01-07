@@ -2401,3 +2401,343 @@ md - 2
     - 소멸자 또한 함수이므로 정적 바인딩이 수행되기 때문에 p의 타입이 Base*이기 때문에 자식의 소멸자가 실행되지 않는 것이다.
     - 따라서 소멸자를 동적 바인딩으로 바꿔줄 필요가 있다.
     - 이러한 이유로 인해 C++에서 부모의 소멸자는 virtual로 바꿔줄 필요가 있다.
+
+### interface
+
+- interface
+
+  - ```c++
+    //자식 클래스의 공통의 기능을 부모타입 포인터를 통해 이용하기 위해서는 해당 기능이 반드시
+    //부모 클래스에서 비롯되어야 한다. -> Draw라는 기능을 쓰기 위해서는 Shape에서 제공되어야함
+    class Shape{
+    public:
+        virtual ~Shape() { }
+        //Shape의 객체를 생성하지 않는다면, 아래 함수는 호출되지 않는다.
+    	void Draw()
+        {
+            cout << "Shape Draw"
+        }
+    };
+    
+    class Rect : public Shape {
+    public:
+        ~Rect() { cout << "~Rect()" << endl; }
+        #if 0
+        void Draw()
+        {
+            cout << "Rect draw" << endl;
+        }
+        #endif
+        
+        virtual void Draw() = 0; //순수 가상 함수
+    };
+    
+    class Circle : public Shape{
+    public:
+        ~Circle() { cout << "~Circle()" << endl; }
+        void Draw()
+        {
+            cout << "circle draw" << endl;
+        }
+    };
+    
+    int main()
+    {
+        vector<Shape*> v;
+        
+        v.push_back(new Rect);
+        v.push_back(new Circle);        
+        v.push_back(new Rect);
+        v.push_back(new Circle);        
+        v.push_back(new Rect);
+        v.push_back(new Circle);
+           
+        for (int i = 0; ii < v.size(); ++i)
+        {
+            v[i]->Draw(); //Shape에 Draw가 없으면 오류 발생
+        }
+        
+            
+        for (Shape* P : v){
+            p->Draw();					  //이와 같은 방식으로도 동작 가능
+        }
+    	
+        
+    }
+    ```
+
+    - 부모 타입을 통해 Rect의 Circle을 동시에 다룰 수 있다.
+    - 부모 클래스가 제공하는 함수를 자식 클래스가 오버라이딩 함수일 경우 해당 함수는 가상이어야 한다.
+    - 가상 함수가 존재하는 모든 부모 클래스는 소멸자가 가상 소멸자여야 한다.
+    - 부모 입장에서 구현을 제공할 필요가 없고, 자식이 반드시 재정의를 해야한다면, "순수 가상 함수"를 이용해야 한다.
+      - 구현을 제공하지 않고 '함수 = 0' 의 형태를 가지고 있다.
+    - 순수 가상함수를 한개 이상 가지고 있는 클래스를 "추상 클래스"라 한다.
+      - 추상 클래스는 인스턴스화가 불가능하다.
+      - 추상 클래스는 앞에 표시를 해서 abstract class 라고 적기도 한다.
+    - 부모클래스의 순수 가상함수를 오버라이딩 해서 구현을 제공하지 않을 경우 자신도 "추상 클래스"가 된다.
+
+- interface
+
+  - ```c++
+    class Camera{
+    public:
+        void StartRecord(){
+            cout << "Start Record" << endl;
+        }
+    
+        void StopRecord(){
+            cout << "Stop Record" << endl;
+        }
+    };
+    
+    class HDCamera{
+        public:
+        void StartRecord(){
+            cout << "Start Record" << endl;
+        }
+    
+        void StopRecord(){
+            cout << "Stop Record" << endl;
+        }
+    }
+    
+    class Car {
+    private:
+        Camera* pCamera;
+    public:
+        Car(Camera* p)
+            : pCamera(p)
+            {
+    
+            }
+        void Start()
+        {
+            //..
+            pCamera->StartRecord();
+        }
+        void Stop()
+        {
+            //..
+            pCamera->StopRecord();
+        }
+    };
+    
+    int main()
+    {
+        Camera cam;	//장비가 개량되어 HDCamera로 바꿔야할때 지나친 번거로움 발생
+        Car car(&cam);
+    
+        car.Start();
+        car.Stop();
+    }
+    ```
+
+    - OCP(Open Close Principle) - 개방 수정원칙
+      - 코드는 수정에 닫혀있고, 확장에는 열려있어야한다.
+      - 만약 자동차의 클래스 및 포인터가 Camera로 되어있을 경우 수정에 닫혀있는것을 위반 - > 모든 것을 HDCamera로 바꿔야 하는데 이는 OCP에 위배됨
+      - Car 클래스는 Camera 타입에 강하게 결합되어 있다라고 표현
+        - 어떤 클래스를 사용할 때 구체적인 타입에 의존하는 것을 의미한다. - 강한 결합
+        - 해결 방법은 약한 결합을 생성하는 것
+
+- Interface3 - 약한 결합
+
+  - ```c++
+    class BlackBoxCamera			//카메라가 BlackBoxCamera라는 것을 따르기로 암시
+    {								//인터페이스
+    public:
+        virtual ~BlackBoxCamera() {}
+        
+        virtual void StartRecord() = 0;
+        virtual void StopRecord() = 0;
+    };
+    
+    struct BlackBoxCamera			//이런 방식으로도 생성 가능
+    {								//struct는 public 기본 적용이므로 타이핑 요구가 조금 적음
+        virtual ~BlackBoxCamera() {}
+        
+        virtual void StartRecord() = 0;
+        virtual void StopRecord() = 0;
+        
+        virtual void NewFeatures() {
+            
+        }	//인터페이스의 기능 확장을 위해 구현의 여지를 만들어두기만 한 공간이다.
+        	//인터페이스를 사용하는 클래스들에서 이를 사용할 수 있으면 오버라이딩 해서 사용.
+    };
+    
+    
+    
+    
+    class Car {
+    private:
+        Camera* pCamera;
+    public:
+        Car(Camera* p)
+            : pCamera(p)
+            {
+    
+            }
+        void Start()
+        {
+            //..
+            pCamera->StartRecord();
+        }
+        void Stop()
+        {
+            //..
+            pCamera->StopRecord();
+        }
+    };
+    
+    int main()
+    {
+        Camera cam;	//장비가 개량되어 HDCamera로 바꿔야할때 지나친 번거로움 발생
+        Car car(&cam);
+    
+        car.Start();
+        car.Stop();;
+    }
+    ```
+
+    1. 약속을 미리 정해두기 - ex) 자동차의 카메라를 연결하기 위해 지켜야 할 규칙을 먼저 설계한다.
+       - 이를 인터페이스라 한다. - 기능을 구현하는 것이 아니라 형태를 약속 - 순수 가상함수 사용
+       - 기본 구현이 제공되지 않는, 순수 가상함수로만 이루어진 클래스는 인터페이스라 한다.
+    2.  BlackBoxCamera를 이용하는 코드를 작성
+    3. 카메라에 작성자는 반드시 BlackBoxCamera 인터페이스를 구현해야 한다.
+       - BlackBoxCamera를 상속받아서 만들어야한다.
+
+    - 인터페이스 사용 이유
+      - 교체가 가능하다.
+      - 약한 결합의 구현
+    - 인터페이스의 문제점
+      - 인터페이스 자체의 수정에 난항이 있음 - 인터페이스 자체를 바꿀 경우 이를 상속받은 모든 것이 수정되어야 하므로 문제가 있다.
+      - 인터페이스를 사용하는 클래스들은 확장에는 문제가 없음
+
+### Virtual 원리
+
+- 1
+
+  - ```c++
+    class Animal {
+        int age;
+    public:
+        virtual ~Animal() {}
+        virtual void Cry() { cout << "Animal Cry" << endl; }
+    };
+    
+    class Dog : public Animal{
+        int color;
+    
+    public:
+        void Cry() override { cout << "Dog Cry" << endl; }
+    };
+    
+    int main()
+    {
+        Animal a;
+        cout << sizeof(a) << endl; //4 -> 16
+    
+        Dog d;
+        cout << sizeof(d) << endl; //8 -> 16
+    }
+    ```
+
+    - 클래스가 가상함수를 하나라도 소유하고 있다면 8바이트(포인터 크기) 만큼 객체의 크기가 증가한다.
+    - 객체 내부에 가상 함수 테이블을 가리키는 포인터가 추가된다.
+
+### RTTI
+
+- 1
+
+  - ```c++
+    
+    class Car{
+    public:
+        int color= 200;
+    };
+    
+    class Sedan : public Car {
+    public:
+        int speed = 100;
+    };
+    
+    void Go(Car* p)
+    {
+    	//p가 Sedan이면 speed를 출력하고 싶다.
+        //체크 없이 사용할 경우
+        //Sedan& s = static_cast<Sedan*>(p);
+        //cout << "Speed: " << s->speed << endl;
+        
+        const type_info& t = typeid(*p);	//RTTI
+        cout << t.name() << endl;	//객체를 통해서 얻기
+        const type_info& t2 = typeid(Sedan);	//클래스 타입을 통해서 얻기
+        if(t1 == t2){
+            cout << "p는 Sedan 타입입니다." << endl;
+        }
+        else{
+            cout << "p는 Sedan 타입이 아닙니다." << endl;
+        }
+    }
+    
+    int main()
+    {
+        Car c;
+        Sedan s;
+        
+        Go(&c);
+        Go(&s);
+    }
+    ```
+
+    - RTTI  사용 방법
+      - 모든 타입은 자신의 타입의 정보를 가지고 있는 type_info 구조체가 있다.
+      - typeid 연산자를 통해 얻어올 수 있다.
+      - 클래스 타입을 통해서 얻을 수 있다.
+        - 만약 동일한 타입이면 t1, t2는 동일하다.
+
+
+
+### operator
+
+- 연산자
+
+  - +, - , =, << , >> < *, / , ...
+
+  - ```c++
+    class Point {
+    private:
+    	int x;
+    	int y;
+    public:
+    	Point(int a, int b) : x(a), y(b)
+    	{
+    	}
+        
+        Point Add(const Point& rhs) const
+        {
+            return Point(x + rhs. x, y + rhs.y);
+        }
+        
+        
+        
+        void Print() const { cout << x << ", " << y << endl; }
+    };
+    
+    int main()
+    {
+    	Point p1(1, 1);
+    	Point p2(1, 10);
+    	
+    	Point p3 = p1 + p2;		//error 발생 - 연산자 재정의 필요
+        //Point p 3 = p1.operator+(p2);
+        //Point p3 = operator+(p1, p2);
+        //위의 형태로 번역한다.
+        Point p3 = p1.Add(p2);  //이렇게 작성해야한다.
+        p3.Print();
+    }
+    ```
+
+    - 클래스는 사용자 정의 함수이므로 사용자 지정 함수에 있어서 연산자 재정의 필요
+
+  - 연산자 오버로딩
+
+    - 연산자를 객체에 대해서 사용할 때, 약속된 함수가 호출된다.
