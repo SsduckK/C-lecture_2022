@@ -1474,7 +1474,8 @@ md - 2
 
         - 명식적으로 함수 삭제시 컴파일 제체에서 오류가 나기때문에 빌드가 안된다.
 
-	### Static
+
+### Static
 
 - static
 
@@ -1699,3 +1700,704 @@ md - 2
     - 소프트웨어를 설계할 때 발생하는 오류의 대부분은 의도하지 않은 동작 떄문
     - 따라서 절대 변동되지 말아야할 값의 존재의 필요
 
+### Thread
+
+- ```c++
+  #include <pthread.h> // before thread
+  #include <unistd.h>
+  #include <iostream>
+  using namespace std;
+  
+  void *foo(void *foo)
+  {
+      for (int i = 0; i < 1000000; ++i)
+      {
+          usleep(200000);
+          cout << "foo" << endl;
+      }
+  
+      return nullptr;
+  }
+  
+  int main()
+  {
+      pthread_t thread;
+      pthread_create(&thread, nullptr, &foo, nullptr);
+      for(int i =0; i < 1000000; ++i)
+      {
+          usleep(100000);
+          cout << i << endl;
+      }
+  }
+  ```
+
+  - 동시에 실행되는 것을 확인 가능하다.
+
+  - 스레드의 특성
+
+    - pthread_create
+      - 스레드를 생성하고, 스레드가 만들어져서 시작할 함수를 지정한다.
+    - 스레드는 자신만의 스택을 가지고 있다.
+    - 모든 스렐드는 같은 프로세스 내에서 동작하기 때문에 데이터를 쉽게 공유할 수 있다.
+
+  - ```c++
+    int sum = 0;
+    
+    pthread_mutex_t g_mutex = PTHREAD_MUTEX_INITIALIZER;
+    
+    void *thread_routine(void *arg) {
+      printf("%s\n", (char *)arg);
+    
+      for (int i = 0; i < 1000000; ++i) {
+          int local = 0;
+          // -----
+          //pthread_mutex_lock(&g_mutex); - 매 시점마다 락을 하게 되기 때문에 성능 다운
+          local += 1;
+          // ----- 임계 영역(critical section)
+          //pthread_mutex_unlock(&g_mutex);
+          // 오직 한 개의 스레드만 접근 가능하도록 해야한다 - 상호 배제(MUTual EXclution)
+          // - MUTEX를 제공해줌
+          //원인
+          	//두 개 이상의 스레드가 sum이라는 메모리에 연산을 동시에 수행할 경우,
+          	//레이스 컨디션이 발생한다.
+          		//sum에 +1을 하는 연산은 원자적이지 않다.
+          			//원자적이란 - 쪼개지지 않음을 의미
+          
+          pthread_mutex_lock(&g_mutex);
+          sum += local;
+          pthread_mutex_unlock(&g_mutex); // 합쳐진 결과를 마지막에 한번에 병합
+          								  // 단순 연상량 비교를 해봐도 1,000,000 vs 1회
+      }
+    
+      return nullptr;
+    }
+    //프로세스가 처음 만들어졌을 때 main 함수를 실행하는 흐름을 '메인 스레드' 라 한다.
+    int main()
+    {
+        cout << "main thread start!!" << endl;
+        pthread_t thread;
+        for (int i = 0; i < 2; ++i)
+        {
+            const char *arg = i == 0 ? "A" : "B";
+            pthread_create(&thread, nullptr, &thread_routine, (void *)arg);
+        }
+        
+        for(int i = 0; i< 2; ++i)
+        {
+            pthread_join(thread[i], nullptr);
+        }
+        //getchar();
+        printf("sum: %d\n", sum);
+        //결과가 제대로 나오지 않는 이유를 이해하는 것이 중요하다
+    }
+    ```
+
+    - 메인 함수가 반환하면, 프로세스가 종료된다
+      - 메인 함수의 반환은 프로세스 내의 모든 스레드가 종료된다.
+
+    - pthread_join 함수를 통해 스레드의 종료까지 대기할 수 있다.
+
+  - 스레드는 동시에 돌아가기 때문에 문제를 발견하기가 굉장히 어렵다
+
+    - 하이젠베르크 버그 - 불확실성 원리(관찰한 시점에 결과를 신뢰 불가)에 기반한 버그
+      - 디버깅이 아닌 이론적인 배경을 바탕으로 해결해야 한다.
+
+  - 멀티 스레드 기반의 코드를 작성할 때는 각각의 코드가 최대한 독립적으로 동작을 하게 작성한 후 마지막에 병합하는 과정을 추가하는 것이 좋다.
+
+- thread 3
+
+  - C++11 부터는 스레드를 표준 라이브러리를 통해 지원한다.
+
+  - ```c++
+    #include <thread>
+    
+    void foo()
+    {
+        std::cout << "foo" << std::endl;
+    }
+    
+    int main()
+    {
+        std::cout << "main thread" << std::endl;
+        std::thread t1(&foo);
+    
+        t1.join();
+    }
+    ```
+
+  - ```c++
+    int sum = 0;
+    std::mutex m;
+    void thread_routine(const char* name)
+    {
+        std::cout << name << std::endl;
+        for (int i = 0; i < 1000000; ++i)
+        {
+            m.lock();
+            sum += 1;
+            m.unlock();
+        }
+    }
+    
+    int main()
+    {
+        std::thread t1(&thread_routine, "A");
+        std::thread t2(&thread_routine, "B");
+    
+        t1.join();
+        t2.join();
+    
+        std::cout << "sum: " << sum << std::endl;
+    }
+    ```
+
+### this
+
+- this
+
+  - ```c++
+    class Point {
+    private:
+        int x;
+        int y;
+    public:
+        //this : 멤버 함수를 호출한 객체의 주소가 전달된다.
+        void set(int a, int b){	//void set(Point* const this, int a, int b)
+            x = a;			//this->x = a;
+            y = b;			//this->y = b;
+        }
+        
+        void foo() { // void foo(Point* const this)
+            std::cout << this << std::endl;
+    	}
+        
+        //객체가 생성되지 않아도 호출될 수 있다.
+        //멤버 변수와 멤버 함수를 사용할 수 없다.
+        	//this가 전달되지 않는다.
+        static void goo() {}
+        static int add(int a, int b) { return a + b; }
+        
+        int hoo(int a, int b) { return a + b; }
+        //컴파일러 : int hoo(Point* this, int a, int b) {}
+    };
+    
+    //일반 함수
+    int sub(int a, int b) {
+        return a - b;
+    }
+    
+    
+    int main() {
+        //Point::add의 타입은 무엇인가 - int(int, int)
+        
+        int (*fp)(int, int) = &Point::add;
+        fp = &sub;
+        
+        Point p1;
+        Point p2;
+    
+        p1.set(10, 20);		//Point::set(&p1, 10, 20);
+        p2.set(10, 30);		//Point::set(&p2, 20, 30);
+        
+    	std::cout << &p1 << std::endl;
+        p1.foo();
+        std::cout << &p2 << std::endl;
+        p2.foo();			// foo, &를 통해 나온 각각의 결과가 1, 2에 대해 동일하다.
+    }
+    ```
+
+    - 사용자는 p1.set(10, 20), p2.set(20, 30)이라는 것으로 생성을 하지만 컴파일러는 set(Point * this, int a, int b)와 같은 형태로 구성을 한다. 이는 this->x = a; this->y = b; 로 된다.
+      - 따라서 p1.set은 set(&p1, 10, 20). p2.set은 set(&p2, 20, 30)이 된다.
+    - 정적 멤버 함수는 객체가 생성되기 이전에 사용할 수 있으므로 this에 대해 전달이 불가능하다.
+
+- this2 - this 의 활용
+
+  - ```c++
+    class User
+    {
+        std::string name_;
+        int age_;
+    public:
+        //User(std::string& name, int age) {}
+    	User(const std::string& name, int age) : name_(name), age_(age) {}
+        //User(const std::string& name, int age) {}
+    	void set(const std::string& name, int age)
+        {
+            name_ = name;
+            age_ = age;
+        }
+    
+    };
+    
+    int main()
+    {
+        User user1()
+    }
+    ```
+
+  - this 활용
+
+    - 멤버 변수 이름과 함수 인자 이름이 동일할 때, 멤버 변수를 명시적으로 접근할 때 사용
+    - 초기화 리스트에서 this->xxxx 형식으로 초기화가 불가능하다
+    - 멤버 변수 이름과 동일한 인자를 받을 경우, this를 명시적으로 작성해줘야 한다.
+      - 멤버 데이터는 이름의 뒤에 언더스코어 형식을 권장한다.
+
+- 활용 2
+
+  - ```c++
+    class User {
+    private:
+    	std::string name_;
+        std::string address_;
+        std::string phone_;
+    public:
+        void SetName(const std::string& name) {
+            name_ = name;
+            return this;
+        }
+        void SetAddress(const std::string& address) { 
+            address_ = address;
+            return this;
+        }
+        void setPhone(const std::string& phone) { 
+            phone_ = phone; 
+            return this;
+        }
+    };
+    
+    int main() {
+        User user;
+    
+        user.SetName("Tom");
+        user.SetAddress("Seoul");
+        user.SetPhone("010-1234-5678"); 	//user.이 번거로움 
+        									//-> 함수에서 return this로 변경
+        
+        user.SetName("Tom")->SetAddress("Seoul")->SetPhone("010-1234-5678");
+            //한줄의 코드로 위의 세 줄의 코드의 역 수행
+    }
+    
+    // 아래와 같이 참조를 통한 방식으로도 가능
+      User* SetName(const std::string& name) {
+        name_ = name;
+        return this;
+      }
+      User* SetAddress(const std::string& address) {
+        address_ = address;
+        return this;
+      }
+      User* SetPhone(const std::string& phone) {
+        phone_ = phone;
+        return this;
+      }
+    #endif
+      User& SetName(const std::string& name) {
+        name_ = name;
+        return *this;
+      }
+      User& SetAddress(const std::string& address) {
+        address_ = address;
+        return *this;
+      }
+      User& SetPhone(const std::string& phone) {
+        phone_ = phone;
+        return *this;
+      }
+    };
+    ```
+
+### inheritance
+
+- 상속
+
+  - ```c++
+    class User{						//Base / Super 클래스라고 부른다.
+    private:
+        string name;
+        int age;
+    };
+    								//Derived / Sub 클래스 라고 부른다.
+    class Student : public User{
+    private:
+        int id;
+    };
+    
+    class Professor : public User{
+    private:
+        int major;
+    }
+    //상속 문법을 이용하면 공통된 속성을 관리하는 것이 편리하다.
+    
+    
+    ```
+
+    - student, professor는 각각 id, major 만 제외하면 user의 name, age를 받는다.
+    - User <= student, User <= professor (<, =는 등호, 부등호가 아니라 화살표의 기능으로 사용함)
+
+  - private: 자신의 멤버함수 안에서만 접근이 가능하고, 외부에서는 접근이 불가능합니다.
+
+    - 자식 클래스에서 부모 클래스의 private 멤버 변수에 대해 접근이 불가능하다.
+
+  - public: 어디서나 접근이 가능합니다.
+
+  - protected : 외부에서는 접근이 불가능하고 자식 클래스를 통해서는 접근이 가능하다.
+
+  - ```c++
+    class User{
+    private:
+        int age;
+        //string name - Student를 이용해도 접근 할 수 없다.
+    protected:
+        //string name;	//Student를 이용해서만 접근이 가능하고 외부에서는 접근이 불가능하다.
+        std::string GetName() const ( return name; )
+    };
+    
+    class Student : public User{
+    private:
+        int id;
+    public:
+        //부모의 상태에 접근하는 모든 기능은 무보가 제공하는 멤버 함수를 통해서 이루어져야 한다.
+        void PrintName(){
+    //        cout << name << endl;
+            cout << GetName() << endl;
+        }
+    };
+    ```
+
+  - 객체지향 설계의 5대 원칙 - SOLID
+
+    - SRP(단일 책임 원칙)
+      - 모든 모듈은 단 하나의 책임을 가져야 한다.
+        - 함수의 이름은 되도록 범용적이 아니라 좁은 영역, 응집되게 생성할 것
+    - OCP(개방 폐쇄 원칙) - 객체 지향 설계에 있어 궁극적인 목표
+      - 수정에는 닫혀 있고, 확장에는 열려 있어야 한다.
+      - 새로운 기능이 추가되어도 기존 코드는 수정되어선 안된다.
+    - LSP
+    - ISP
+    - DIP - 아래 셋은 차후에 공부하기
+
+- 상속 3 - 생성자, 소멸자에 대해
+
+  - ```c++
+    class Base{
+    public:
+        Base() { cout << "Base()" << endl; }
+        Base(int a) { cout << "Base(int)" << endl; }
+        ~Base() { cout << "~Base()" << endl; }
+    };
+    
+    class Derived : public Base {
+    public:
+        //원리 컴파일러는 자식 클래스의 생성자에게 초기화 리스트를 통해 부모의 기본 생성자를
+        // 호출하는 코드를 삽입한다.
+        //Derived() { cout << "Derived()" << endl; }
+        //Derived() : Base(42) { cout << "Derived()" << endl ;} int가 들어있는 생성자 호출
+        Derived() { cout << "Derived()" << endl ;}
+        ~Derived() { cout << "~Derived()" << endl; } //컴파일러가 자동으로 소멸자 삽입-호출
+    };
+    
+    int main()
+    {
+        Derived d;
+    }
+    ------
+    Base()
+    Derived()
+    ~Derived()
+    ~Base()
+    ```
+
+    - Base 생성 - Derived 생성 - Derived 소멸 - Base 소멸
+    - 부모가 기본 생성자를 제공하지 않을 경우 명시적으로 부모의 생성자를 호출해야 한다.
+      - 없을 경우 컴파일 오류 발생
+
+  - ```c++
+    class Animal {
+    //public:
+    protected:
+        Animal() {}
+    };
+    
+    class Dog : public Animal{
+    public:
+        Dog() {}
+    };
+    
+    int main()
+    {
+        Animal a;   //error:외부에서 protected 생성자를 접근할 수 없다.
+        Dog d;	//가능
+        		//Dog의 생성자를 먼저 호출하고, Dog의 생성자 안에서 Animal의 생성자를
+        		//호출합니다. 파생 클래스에서는 기반 클래스의 protected 멤버에 접근이 가능
+    }
+    ```
+
+    - Protected 생성자의 의도
+      - 자신 타입의 객체는 생성할 수 없지만, 파생 클래스 타입의 객체는 생성할 수 있다.
+
+### Virtual
+
+- virtual - upcasting
+
+  - ```c++
+    int main()
+    {
+        double d = 3.14;
+        int*p = &d; //error double의 주소를 int*에 담을 수 없다.
+    }
+    ```
+
+  - ```c++
+    class Animal {
+    public:
+        int age;
+    };
+    class Dog : public Animal {
+    public:
+        int color;
+    };
+    int main()
+    {
+        Dog d;
+        Animal* p = &d;
+        //기반 클래스의 포인터 타입으로 자식 클래스의 객체의 주소를 담을 수 있다.
+        //암묵적인 변환이 허용된다.
+        //Upcasting
+    }
+    ```
+
+  - 상속 : is - a 관계가 성립된다.
+
+    - 자식 클래스 is a 부모 클래스 - ex) Dog is a Animal
+
+- virtual - downcasting
+
+  - ```c++
+    class Animal {
+    public:
+        int age;
+    };
+    class Dog : public Animal {
+    public:
+        int color;
+    };
+    int main()
+    {
+        Dog d;
+        Animal* p = &d;
+    }
+    
+    int main()
+    {
+        Animal* p = new Dog;
+    
+        Dog d;
+        Animal* p2 = &d; // Upcasting 문제 없이 작동
+        
+        Dog* pDOog = p1; //error - 부모의 포인터 타입을 자식의 포인터 타입으로의 암묵적 변환은					 //허용되지 않는다. - 명시적인 캐스팅이 필요하다.
+        
+        Dog* pDog = static_cast<Dog*>(p1); // 명시적 표기
+    }
+    ```
+
+    - Upcasting과 달리 Downcasting은 명시적인 캐스팅이 필요하다.
+
+- virtual의 활용
+
+  - ```c++
+    
+    class Animal {
+    public:
+        int age;
+    };
+    
+    class Dog : public Animal {
+    public:
+        int color;
+    };
+    
+    class Cat : public Animal {};
+    
+    bool IsOlderThan10YearsOld(Dog* p){
+        return p->age >10;
+    }
+    
+    bool IsOlderThan10YearsOld(Cat* p){
+        return p->age >10;
+    }
+    
+    //isolderthan10yearsold 가ㅏ 중복으로 활용되므로 하나로 표현하기
+    
+    bool IsOlderThan10YearsOld(Animal* p)	//업캐스팅
+    {
+        return p->age >10;
+    }
+    
+    int main() {
+      
+        vector<Dog*> v1;	//Dog 타입만 보관 가능
+        vector<Animal*> v2;	//Animal의 모든 파생 클래스를 보관 가능 - 동종을 보관하는 컨테이너
+        
+        Dog d;
+        Cat c;
+        
+        v2.pushback(&d);
+        v2.pushback(&c);		//v1으로 실행할 시 오류 발생
+        
+        IsOlderThan10yearsOld(&d);
+        IsOlderThan10yearsOld(&c);
+    }
+    ```
+
+  - 폴더 안에는 파일도 있고 폴더도 있다.
+
+    - 파일과 폴더의 공통의 부모가 존재하면, 우리는 하나의 컨테이너를 통해 관리하는 것이 가능하다.
+
+  - ```c++
+    class Item {};
+    
+    class File : public Item {};
+    class Folder : public Item {	//폴더 안에는 vector를 통해 자료를 저장가능하게 해둠
+        vector<Item*> v;
+    };
+    ```
+
+- virtual - 함수 동작
+
+  - ```c++
+    class Animal {
+        public:
+        void Cry() { cout << "Animal cry" << endl; }
+    };
+    
+    class Dog : public Animal {};
+    
+    int main() {
+        Animal a;
+        Dog d;
+    
+        a.Cry();
+        d.Cry();
+    }
+    ---
+    Animal cry
+    Animal cry
+    ```
+
+  - 기반 클래스의 멤버 함수를 자식 클래스에서 다시 정의할 수 있다.
+
+    - ```c++
+      class Dog : public Animal {
+      public:
+      	void cry() { cout << "Dog cry" << endl; }
+      };
+      ---
+      Animal cry	//Animal::cry
+      Dog cry		//Dog::cry
+      ```
+
+    - 이를 함수 오버라이딩이라 한다.
+
+  - Upcasting을 통해 할 경우
+
+    - ```c++
+      Animal* p = &d;
+      p->Cry();
+      ---
+      Animal Cry
+      ```
+
+      - d를 지정중이므로 Dog cry가 나올거라 생각했으나 Animal Cry가 출력됨
+
+    - C++ 함수 바인딩 - 어떤 함수를 호출할 지 결정하는 것
+
+      - p->Cry()
+        - Animal::Cry()와 Dog::Cry() 중 선택하는 것
+
+    - 바인딩에는 정적 바인딩, 동적 바인딩이 있다.
+
+      - 정적 바인딩 : Animal::Cry()
+
+        - 컴파일러가 p의 타입(Animal *)을 보고 Animal의 함수를 호출하도록 기계어를 생성한다.
+
+      - 동적 바인딩 : Dog::Cry()
+
+        - 컴파일러가 실행 시간에 p가 어떤 타입인지를 조사해서, 해당 타입의 함수를 호출하도록 기계어를 생성한다.
+        - 실행 시간에 결정되는 p의 타입에 따라 호출되는 함수가 달라진다.
+
+      - C++은 기본적으로 멤버함수에 대해 정적 바인딩을 따른다.
+
+        - 멤버함수의 정적 바인딩을 동적 바인딩으로 바꾸는 키워드 존재 - virtual
+
+        - ```c++
+          virtual void Cry() { cout << "Animal Cry" << endl; }
+          virtual void Cry() { cout << "Dog cry" << endl; }
+          ```
+
+        - virtual 키워드를 통해 동적 바인딩을 통해 우리가 원하는 결과를 출력할 수 있다.
+
+        - 자식이 제공하는 모든 멤버 함수들은 virtual 함수 여야 한다.
+
+  - ```c++
+    class Animal {
+    public:
+        virtual void Cry() { cout << "Animal cry" << endl; }
+    };
+    
+    class Dog : public Animal{
+    public:
+        //virtual void cry() {cout << "Dog cry" << endl; }
+        
+        //ㅏ래 함수가 부모의 함수를 오버라이딩 한 것인지 아닌 것인지 확인이 어렵다.
+        virtual void Cry() override;
+        void Cry() override; //윗 줄은 요즘은 이렇게 더 간략하게 작성한다.
+    };
+    //virtual  ------------- virtual 함수임을 표시만 해두기. 선언부에만 virtual 사용
+    //overide 또한 virtual 처럼 선언부에만 제공할 것
+    void Dog::Cry(){
+        cout << " Dog cry" << endl;
+    }
+    
+    int main() {
+        Animal* p = new Dog;
+    
+        p->Cry();
+    }
+    ```
+
+    - 부모의 멤버 함수가 virtual 이면 자식 멤버 함수도 virtual이 된다.
+    -  virtual 은 선언과 구현을 분리할 때 선언에만 사용한다.
+    - C++11 에서는 부모로부터 오버라이딩 한 함수라는 표시를 할 수 있다. - override
+      - override 또한 virtual 처럼 선언부에만 제공할 것
+
+- virtual - 동적 할당
+
+  - ```c++
+    class Base{
+    public:
+        Base() {cout << "based()" << endl; }
+        //~Base() {cout << "~Based()" << endl;} - 메모리 누수 발생 가능
+        virtual ~Base() { cout << "~Based()" << endl; }
+    };
+    
+    class Derived : public Base{
+    public:
+        Derived() { cout << "Derived()" << endl;}
+        ~Derived() { cout << "~Derived()" << endl; }
+    };
+    
+    int main()
+    {
+        Base* p = new Derived;
+        delete p;	//부모의 소멸자를 다이렉트로 호출함 - 정적 바인딩으로 인해
+    }
+    ------
+    Base()
+    Derived()
+    ~Base()	//자식의 소멸자가 실행되지 않아 메모리의 누수가 발생함
+    ```
+
+    - C++은 일반적으로 정적 바인딩을 한다.
+    - 소멸자 또한 함수이므로 정적 바인딩이 수행되기 때문에 p의 타입이 Base*이기 때문에 자식의 소멸자가 실행되지 않는 것이다.
+    - 따라서 소멸자를 동적 바인딩으로 바꿔줄 필요가 있다.
+    - 이러한 이유로 인해 C++에서 부모의 소멸자는 virtual로 바꿔줄 필요가 있다.
