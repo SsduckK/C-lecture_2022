@@ -2741,3 +2741,996 @@ md - 2
   - 연산자 오버로딩
 
     - 연산자를 객체에 대해서 사용할 때, 약속된 함수가 호출된다.
+
+  - 연산자 오버로딩을 만들때 보편적 사용 방법
+
+    - 연산의 결과로 내부 멤버 데이터의 변경이 발생한다 - 멤버 함수
+    - 연산의 결과로 멤버 데이터의 변경이 없다 - 일반 함수
+
+  - ```c++
+    
+    class Point {
+    private:
+        int x;
+        int y;
+    
+    public:
+        Point(int a, int b) : x(a), y(b)
+        {
+    
+        }
+        //일반 함수
+        friend Point operator+(const Point& lhs, const Point& rhs)
+        {
+        	return Point(lhs.x + rhs.x, lhs.y + rhs.y);
+        }
+        
+        void Print() const
+        {
+            cout << x << ", " << y << endl;
+        }
+    };
+    
+    int main()
+    {
+        Point p1(10, 10);
+        Point p2(20, 20);
+    
+        Point p3 = p1 + p2;
+        //p1.operator+(p2)
+        //operator+(p1, p2)
+        
+        p3.Print();
+    }
+    ```
+
+    - 연산자 재정의에 한개 이상의 인자는 반드시 사용자 정의 타입이어야 한다.
+
+      - ```c++
+        int operator+(int a, int b)
+        {
+        	return a + b;
+        }
+        ```
+
+    - 인자의 개수를 변경할 수 없다.
+
+      - ```c++
+        int operator+(int b, const Point& b)
+        {
+            return a + b.x:
+        }
+        ```
+
+      - 
+
+    - 연산자의 우선순위를 변경할 수 없다.
+
+    - 새로운 연산자를 만들 수 없다.
+
+    - ::, ., ?: --------> 와 같은 연산자는 오버로딩이 불가능하다
+
+    - =, (), [],  -> --------------> 연산자는 멤버 함수로만 만들 수 있다.
+
+- cout의 정의
+
+  - cout은 객체이다.
+
+  - std::ostream cout; 전역 객체
+
+  - ```c++
+    int main()
+    {
+        int n = 10;
+        cout << n;
+        //cout.operator<<(n)
+        // => cout.operator<<(int) 를 호출함
+    
+        cout << endl;
+    }
+    ```
+
+  - ```c++
+    
+    #include <stdio.h>
+    namespace std
+    {
+        class ostream
+        {
+        public:
+            ostream& operator<<(const char* s)
+            {
+                printf("%s", s);
+            }
+    
+            ostream& operator<<(int n)
+            {
+                printf("%d", n);
+            }
+    
+            ostream& operator<<(double d)
+            {
+                printf("%lf", d);
+            }
+        };
+    
+        ostream cout;
+    }
+    
+    int main()
+    {
+        std::cout << 42;
+        std::cout << ", ";
+        std::cout << 3.14;
+    
+        std::cout << 42 << ", " << 3.14; //함수 반환을 클래스 참조로 바꾸어 연쇄적인 << 호출을
+        								 //가능하게 했다.
+    }
+    ```
+
+- << 연산, class
+
+  - ```c++
+    class Point {
+    private:
+        int x;
+        int y;
+    
+    public:
+        Point(int a, int b) : x(a), y(b)
+        {
+    
+        }
+    
+        
+        void Print() const
+        {
+            cout << x << ", " << y << endl;
+        }
+        
+        friend ostream& operator<<(ostream& os, const Point& p);
+    };
+    
+    ostream& operator<<(ostream& os, const Point& p)
+    {
+    	return os << p.x << ", " << p.y
+    }
+    
+    int main()
+    {
+        Point p1(10, 20);
+        cout << p1 << endl;
+        //cout.operator<<(p1)
+        // => cout.operator<<(const Point&)
+        //멤버함수는 ostream 클래스를 수정할 수 없으므로 제공할 수 없다.
+        
+        //operator<<(cout, p1)
+        //이와 같은 형태로 일반함수를 만들어야한다
+    }
+    ```
+
+- endl은 함수이다.
+
+  - ```c++
+    ostream& xendl(ostream& os)
+    {
+        os << '\n';
+        return os;
+    }
+    
+    int main()
+    {
+        cout << endl;
+        endl(cout);
+    
+        cout << xendl;
+        xendl(cout);
+    }
+    ```
+
+  - 조작자 함수
+
+    - ```c++
+      ostream& endl(ostream& os)
+      {
+          os << '\n';
+          return os;
+      }
+      ```
+
+- 증감 연산자(++, --)의 재정의
+
+  - ```c++
+    // C/C++에서 가장많이 사용하는 연산자 중에 하나인
+    // 증감(++/--)연산자를 재정의하는 것을 이해
+    
+    class Integer {
+    private:
+        int value;
+    
+    public:
+        Integer(int n = 0)
+            : value(n)
+        {
+        }
+    
+        // 멤버 함수로 연산자 재정의 함수를 제공.
+        //  ++n
+        Integer& operator++()
+        {
+            ++value;
+            return *this;
+        }
+    
+        //  n++
+        // 차이점) 반환타입이 값 타입
+        Integer operator++(int)
+        {
+            Integer temp = *this; // 값이 변경되기 전의 상태를 보관
+            ++value;
+    
+            return temp;
+        }
+    
+        friend std::ostream& operator<<(std::ostream& os, const Integer& i);
+    };
+    
+    std::ostream& operator<<(std::ostream& os, const Integer& i)
+    {
+        return os << i.value << endl;
+    }
+    
+    int main()
+    {
+        int n1 = 0;
+        cout << n1 << endl;
+    
+        ++n1;
+        n1++;
+    
+        Integer n2;
+        cout << ++n2 << endl;
+        // => cout.operator<<(n2)
+        // => operator<<(cout, n2)
+        ++n2;
+        n2++;
+    }
+    ```
+
+- Operator - 생성자
+
+  - ```c++
+    class Point{
+    public:
+        int x = 0;
+        int y = 0;
+        
+        Point& operator=(const Point& rhs)
+        {
+            x = rhs.x;
+            y = rhs;
+            return *this;
+        }
+    };
+    
+    int main()
+    {
+        Point p1;
+        Point p2 = p1;	//초기화 - 복사 생성자
+        
+        p2 = p1; //대입 - 대입 연산자
+        //p2.operator=(p1)와 같은 형태
+    }
+    ```
+
+  - 생성자를 제공하지 않으면, 컴파일러는 인자가 없는 기본 생성자를 제공한다
+
+  - 복사 생성자를 제공하지 않으면, 컴파일러는 복사 생성자를 제공한다(얕은 복사)
+
+  - 소멸자를 제공하지 않으면, 컴파일러는 소멸자를 제공한다
+
+  - 사용자가 대입 연산자를 제공하지 않으면, 컴파일러는 대입 연산자를 제공합니다
+
+- 대입 연산자
+
+  - 컴파일러가 만들어주는 얕은 복사를 수행한다
+    - 클래스 내부에 포인터 멤버가 없다면, 문제가 발생할 수 있다
+      - 깊은 복사
+      - 참조 계수
+      - 복사 금지
+    - 복사 생성자를 구현했다면, 반드시 대입연산자도 구현해야 한다
+  - 대입 연산자는 반드시 멤버 함수로 구현해야 한다
+    - =, () , [] , ->   ------------   이들은 멤버 함수로 구현할 것
+
+### Exception
+
+- 예외처리
+
+  - C언어의 오류 처리 방법 - 반환값을 통해 처리
+
+  - ```c
+    int foo(int a)
+    {
+        if (a<0){
+            return -1;	//실패할 경우 약속된 값을 반환
+        }
+        return 0;
+    }
+
+  - 문제점
+    - 반환된 값이 실패를 나타내는 것인지, 연산의 결과인지 구분하는 것이 어려울 수 있다.
+    - 함수가 오류를 반환할 때, 오류를 반드시 처리하라고 강제화할 방법이 필요하다
+
+- C++에서의 예외 처리
+
+  - ```c++
+    int goo(int a)
+    {
+        if (a < 0) {
+            throw 1; 	//실패할 경우 예외를 던진다
+            			//반환값(return)과 실패의 전달(throw)이 분리된다
+        }
+        return 0;
+    }
+    ```
+
+  - 함수가 예외를 던지면 호출자는 반드시 예외를 처리해야 한다
+
+  - 예외를 처리하지 않으면 프로그램은 비정상 종료된다
+
+  - ```c++
+    int main()
+    {
+        try{
+            int ret1 = goo(-100);
+        } catch(int n){	//int형 예외를 catch한다
+        } catch(double d){//double형 예외를 catch한다
+        } catch(...){//...은 모든 종류의 예외를 catch할 수 잇다
+        }
+        
+        //예외가 catch되면 함수의 코드는 정상적으로 종료됨
+        cout << "main and..." << endl;
+    }
+    ```
+
+- 예외를 던질 때, 예외 전용 클래스를 만들어서 사용한다
+
+  - ```c++
+    void foo(int a)
+    {
+        if (a < 0) {
+            // throw 1;
+            throw MemoryException();
+        }
+    }
+    
+    int main()
+    {
+        try {
+            foo(-100);
+        } catch (const MemoryException& e) {
+            cout << e.what() << endl;
+        }
+    }
+    ```
+
+### thiscall
+
+- 1
+
+  - ```c++
+    
+    class Point{
+        int x, y;
+    public:
+        //void set(Point* const this, int a, int b)
+        void set(int a, int b)
+        {
+            x = a;
+            y = b;
+        }
+        static void foo(int a)
+        {
+            //x = a; -> 불가능
+            //정적 멤버 함수는 객체 없이 호출이 가능하다
+            	//객체의 멤버 데이터에 접근 불가
+            		//this 가 전달되지 않는다
+        }
+    };
+    
+    int main()
+    {
+        Point p1, p2;
+    
+        p1.set(10, 20);	//Point::set(&p1, 10, 20);
+        p2.set(30, 40);	//Point::set(&p2, 30, 40)
+    }
+    ```
+
+  - ```c++
+    class Sample{
+        int data;
+    public:
+        void f1() { cout << "f1" << endl; }
+        int f2()
+        {
+            cout << "f2" << endl;
+            return 0;
+        }
+    
+        int f3()
+        {
+            cout << "f3" << endl;
+            return data;
+        }
+        
+        static int call_f3(Sample* const self)
+        {
+            //this에 대해 null 체크를 수행하는 것은 표준에서 권장하지 않음
+            //정적 멤버 함수를 통해 동일한 코드를 작성해줘야 한다.
+            if (self){
+                return self->f3();
+            }
+            return 0;
+        }
+    };
+    
+    int main()
+    {
+        Sample* p = nullptr;	//메모리 할당 실패로 인해 nullptr
+        p->f1();
+        p->f2();
+        p->f3();
+    }
+    ```
+
+- 멤버 함수 포인터 이야기
+
+  - ```c++
+    void foo()
+    {
+        printf("foo\n");
+    }
+    
+    class Dialog {
+    public:
+        void Close() // void Close(Dialog* const this)
+        {
+            cout << "Dialog close" << endl;
+        }
+    
+        static void foo() // void foo()
+        {
+            cout << "Dialog foo" << endl;
+        }
+    };
+    
+    int main()
+    {
+        Dialog dlg;
+        dlg.Close();
+        // 멤버 함수 호출은 객체가 필요합니다.
+    
+        // 멤버 함수 포인터를 만드는 방법
+        void (Dialog::*mp)() = &Dialog::Close;
+        // (*mp)(); // error!
+        // => 객체가 필요합니다.
+    
+        // .* : 멤버 함수 포인터 참조 연산자
+        //->* : 객체가 포인터인 경우 멤버함수 포인터 참조 연산자
+        (dlg.*mp)();
+    
+        Dialog* pDialog = new Dialog;
+        (pDialog->*mp)();
+        
+        void (*f)() = &Dialog::foo;
+        (*f)();
+    
+        // void (*f)() = &foo;
+        // (*f)();
+    }
+    ```
+
+    - 일반 함수 포인터에 멤버 함수의 주소를 담을 수 없다
+    - 일반 함수 포인터에 정적 멤버 함수의 주소를 담을 수 없다
+    - 멤버 함수 포인터 타입을 별도로 제공한다
+
+- 스레드 클래스를 설계
+
+  - ```c++
+    class Mythread : public thread{
+    public:
+        bool threadLoop() override;
+        {
+            cout << "MyThread threadLoop" << endl;
+            return ture;
+        }
+    };
+    
+    //스레드 클래스 설계
+    class Thread{
+        pthread_t thread;
+    public:
+        virtual ~Thread() {}
+        //모든 부모 클래스는 가상 소멸자 제공
+        
+        void run()
+        {
+            pthread_create(&thread, nullptr, &threadLoop, this);
+        }
+        
+        //일반 함수 포인터에 멤버 함수 포인터는 담을 수 없지만 정적 멤버 함수 포인터는 담을 수 있다
+        static void* _thread.cpp(void* arg)
+        {
+            Thread* self = static_cast<Thread*>(arg);
+            self->threadLoop();
+            
+    		return 0
+        }
+        
+        void join()
+        {
+            pthread_join(thread, nullptr);
+        }
+        
+        //virtual bool threadLoop() { return false; } - 이렇게도 제작 가능
+        virtual bool threadLoop() = 0;
+    }
+    int main()
+    {
+        MyThread t;	//이 순간 스레드가 생성되어 가상함수인 threadLoop()를 수행하게 한다
+        t.run();
+        t.join();
+    }
+    ```
+
+    - static의 적절한 활용이 중요
+
+### 접근변경자
+
+- ```c++
+  class Base{
+  public:
+      void foo() { cout << "foo" << endl }
+  
+  protected:
+      void goo() { cout << "goo" << endl; }
+  
+  private:
+      void foo() { cout << "hoo" << endl;}
+  };
+  //				//public 접근 변경자
+  class Derived : public Base{
+  
+  };
+  //부모의 접근 지정자를 자식 클래스를 통해 접근할 때 변경하는 방법
+  //	public Base
+  //	class Derived{
+  //	public:
+  //		void foo() {}
+  //	protected:
+  //		void() goo {}
+  //	}
+  }
+  int main()
+  {
+      Base b;	//ok
+      Derived d;		//ok
+  }
+  ```
+
+  - 클라이언트가 stack을 요구시
+
+    - stack을 다시 만든다
+    - list를 한쪽으로만 사용하면 stack이다. - list를 재사용한다
+
+  - 소프트웨어의 재사용
+
+    1. 상속
+
+       ```c++
+       class stack : public list<int>{
+       public:
+           void push(int n)
+           {
+           	push_back(n); 
+           }
+           
+           void pop()
+           {
+         		pop_back();
+           }
+           
+           int& top()
+           {
+               return back;
+           }
+       }
+       
+       int main()
+       {
+           stack s;
+       	a.push(10);
+           a.push(20);
+           a.push(30);
+           
+           cout << a.top() << endl;
+           a.pop();
+           
+           cout << a.top() << endl;
+           a.pop();
+       }
+       ```
+
+       - stack은 list의 모든 기능을 물려받는다
+
+       - 상속은 부모가 제공하는 데이터와 인터페이스를 물려받는다
+
+       - class stack : public list<T> {
+
+         private 상속 : 부모로부터 구현은 물려받지만(자식이 내부적으로 사용하지만) 인터페이스는 물려받지 않는다(부모 함수를 외부로 노출하지 않는다.)
+
+         }
+
+    2. 포함
+
+       - ```c++
+         template <typename T>
+         class stack{
+         std::list
+         }
+         ```
+
+       - 상속의 문제
+
+         - 부모 클래스와 자식 클래스의 강한 결합이 형성된다.
+           - 부모 클래스에 대한 변경이 자식 클래스로 전파된다. - 유지보수에 난저
+         - 부모클래스를 자식 클래스에서 public 상속할 경우 불필요한 인터페이스가 외부에 노출되는 문제가 있다.
+           - C++ : => private 상속
+         - 상속을 기존 클래스의 재사용 목적으로 사용하는 것은 권장하지 않는다
+           - 포함을 이용하는 것이 좋을 때가 많다
+
+### 도형 편집기로 배우는 객체지향
+
+- ```c++
+  class Shape{
+      void Draw()
+      {
+          cout << "Shape Draw" << endl;
+      }
+  };
+  
+  class Rect : public Shape{
+  public:
+      void Draw()
+      {
+          cout << "Rect draw" << endl;
+      }
+  };
+  
+  class Circle : public Shape{
+  public:
+      void Draw()
+      {
+          cout << "Circle draw" << endl;
+      }
+  };
+  
+  int main()
+  {
+      //vector<Rect*> reacta;
+      //vector<Circle*> circlea;
+      vector<Shape*> v;
+      
+      while (1){
+          int cmd;
+          cin >> cmd;
+          if (cmd == 1) {
+              v.push_back(new Rect);
+          }
+          else if (cmd == 2){
+              v.push_back(new Circle);
+          }
+          else if (cmd == 9){
+              for (Shape* p : v){
+                  p->Draw();
+              }
+          }
+      }
+  }
+  ```
+
+  - 모든 도형의 공통의 부모가 있다면 모든 도형을 묶어서 관리할 수 있다.
+  - 모든 자식의 공통적 특징이 있다면 반드시 부모에도 있어야 한다
+    - LSP - Liskov Substitution Principle
+      - 자식 클래스는 부모 클래스로 대체할 수 있다.
+
+- 복사
+
+  - ```c++
+    #include <iostream>
+    #include <vector>
+    using namespace std;
+    
+    class Shape {
+    public:
+        virtual void Draw()
+        {
+            cout << "Shape Draw" << endl;
+        }
+    
+        virtual Shape* Clone()
+        {
+            return new Shape(*this);
+        }
+    };
+    
+    class Rect : public Shape {
+    public:
+        void Draw() override
+        {
+            cout << "Rect draw" << endl;
+        }
+    
+        Shape* Clone() override
+        {
+            return new Rect(*this);
+        }
+    };
+    
+    class Circle : public Shape {
+    public:
+        void Draw() override
+        {
+            cout << "Circle draw" << endl;
+        }
+    
+        Shape* Clone() override
+        {
+            return new Circle(*this);
+        }
+    };
+    
+    int main()
+    {
+        vector<Shape*> v;
+    
+        while (1) {
+            int cmd;
+            cin >> cmd;
+    
+            if (cmd == 1) {
+                v.push_back(new Rect);
+            } else if (cmd == 2) {
+                v.push_back(new Circle);
+            } else if (cmd == 8) {
+                cout << "몇 번째 도형을 복사 할까요 >> ";
+                int k;
+                cin >> k;
+    
+                v.push_back(v[k]->Clone());
+    
+    // k번째 도형의 복사본을 만들어서, v에 추가합니다.
+    // k번째 도형은? Rect? Circle?
+    //  - v[k] 타입을 체크해야 합니다.
+    //  - RTTI
+    #if 0
+                if (typeid(Rect) == typeid(*v[k])) {
+                    Rect* p = static_cast<Rect*>(v[k]);
+                    v.push_back(new Rect(*p));
+    
+                } else if (typeid(Circle) == typeid(*v[k])) {
+                    Circle* p = static_cast<Circle*>(v[k]);
+                    v.push_back(new Circle(*p));
+                }
+    #endif
+    
+            } else if (cmd == 9) {
+                for (Shape* p : v) {
+                    p->Draw();
+                }
+                // 다형성
+            }
+        }
+    }
+    ```
+
+    
+
+  - 기능이 추가되어도 기존 코드는 수정되지 않게
+
+  - 다형성을 통해 구현하면 OCP를 만족한다
+
+    - 기존에 존재하는 객체를 복제해서, 새로운 객체를 만드는 패턴 - Clone()가상함수 정의
+    - Refactoring - 기존 코드를 변경하지 않고 유지보수가 가능하도록 구조 개선
+
+- 템플릿 메소드 구조
+
+  - ```c++
+    #include <iostream>
+    #include <vector>
+    using namespace std;
+    
+    // #include <mutex>
+    class Mutex {
+    public:
+        void lock() { cout << "동기화 시작" << endl; }
+        void unlock() { cout << "동기화 종료" << endl; }
+    };
+    
+    Mutex m;
+    
+    class Shape {
+    public:
+        void Draw()
+        {
+            m.lock();
+            DrawImpl();
+            m.unlock();
+        }
+    
+        virtual void DrawImpl()
+        {
+            cout << "Shape Draw" << endl;
+        }
+    
+        virtual Shape* Clone()
+        {
+            return new Shape(*this);
+        }
+    };
+    
+    class Rect : public Shape {
+    public:
+        void DrawImpl() override
+        {
+            cout << "Rect draw" << endl;
+        }
+    
+        Shape* Clone() override
+        {
+            return new Rect(*this);
+        }
+    };
+    
+    class Circle : public Shape {
+    public:
+        void DrawImpl() override
+        {
+            cout << "Circle draw" << endl;
+        }
+    
+        Shape* Clone() override
+        {
+            return new Circle(*this);
+        }
+    };
+    
+    int main()
+    {
+        vector<Shape*> v;
+    
+        while (1) {
+            int cmd;
+            cin >> cmd;
+    
+            if (cmd == 1) {
+                v.push_back(new Rect);
+            } else if (cmd == 2) {
+                v.push_back(new Circle);
+            } else if (cmd == 8) {
+                cout << "몇 번째 도형을 복사 할까요 >> ";
+                int k;
+                cin >> k;
+    
+                v.push_back(v[k]->Clone());
+    
+            } else if (cmd == 9) {
+                for (Shape* p : v) {
+                    p->Draw();
+                }
+                // 다형성
+            }
+        }
+    }
+    ```
+
+    - 도형 편집기로 배우는 객체지향 설계 개념
+
+      - Draw에 동기화의 기능의 추가되어야 합니다.
+
+      - 공통성과 가변성의 분리
+        - 변하지 않는 것과 변하는 것은 분리되어야 합니다.
+        - 변하지 않는 전체 알고리즘은 부모가 비가상함수로 제공하고, 변해야 하는 부분만 가상함수화해서 자식이 변경할 수 있도록 하는 설계 방법
+             => Template Method Pattern
+             => NVI(Non Virtual Interface)
+
+### LineEdit
+
+- ```c++
+  // 30_LineEdit.cpp
+  #include <iostream>
+  #include <string>
+  using namespace std;
+  
+  #include <stdio.h>
+  #include <termios.h>
+  #include <unistd.h>
+  // Windows - getch(비표준 함수)
+  
+  // 에코 없이 입력하면 바로 결과가 나오는 처리 방식
+  int getch(void)
+  {
+      struct termios oldt, newt;
+      int ch;
+      tcgetattr(STDIN_FILENO, &oldt);
+      newt = oldt;
+      newt.c_lflag &= ~(ICANON | ECHO);
+      tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+      ch = getchar();
+      tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+      return ch;
+  }
+  //--------
+  
+  // 1. Validation 정책은 변경이 가능해야 한다.
+  //  방법 1) 변하는 것을 가상 함수로 뽑아낸다.
+  //    => Tempalte Method Pattern
+  
+  class LineEdit {
+      std::string data;
+  
+      // 변하지 않는 코드(공통성)에서 변해야 하는 것(가변성)이 있다면
+      // 변해야 하는 것을 '가상함수'로 뽑아낸다.
+      virtual bool validate(char c) { return isdigit(c); }
+  
+  public:
+      std::string GetData()
+      {
+          data.clear();
+  
+          while (1) {
+              // char c = getchar();
+              char c = getch();
+  
+              if (c == '\n')
+                  break;
+  
+              // if (isdigit(c)) {
+              if (validate(c)) {
+                  data.push_back(c);
+                  cout << c;
+              }
+          }
+  
+          cout << endl;
+          return data;
+      }
+  };
+  
+  // 이제 정책을 변경하고 싶다면, 파생 클래스에서 가상 함수를 재정의하면 됩니다.
+  class AddressLineEdit : public LineEdit {
+  public:
+      bool validate(char c) override
+      {
+          return true;
+      }
+  };
+  
+  // Template Method
+  // 1) 런타임에 정책을 변경할 수 없습니다.
+  // 2) 다른 종류의 클래스에서 해당 정책을 재사용할 수 없습니다.
+  
+  int main()
+  {
+      // LineEdit edit;
+      AddressLineEdit edit;
+  
+      while (1) {
+          string s = edit.GetData();
+          cout << "out: " << s << endl;
+      }
+  }
+  ```
+
+- 

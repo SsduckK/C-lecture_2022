@@ -13,6 +13,18 @@ public:
     }
 };
 
+class HDCamera
+{
+public:
+    void StartRecord(){
+        cout << "Start Record" << endl;
+    }
+
+    void StopRecord(){
+        cout << "Stop Record" << endl;
+    }
+};
+
 class Car {
 private:
     Camera* pCamera;
