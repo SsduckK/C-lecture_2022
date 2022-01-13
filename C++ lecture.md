@@ -3535,8 +3535,6 @@ md - 2
     }
     ```
 
-    
-
   - 기능이 추가되어도 기존 코드는 수정되지 않게
 
   - 다형성을 통해 구현하면 OCP를 만족한다
@@ -3733,4 +3731,2043 @@ md - 2
   }
   ```
 
+- 공통성 가변성 분리 2번째
+
+  - ```c++
+    // 30_LineEdit.cpp
+    #include <iostream>
+    #include <string>
+    using namespace std;
+    
+    #include <stdio.h>
+    #include <termios.h>
+    #include <unistd.h>
+    // Windows - getch(비표준 함수)
+    
+    // 에코 없이 입력하면 바로 결과가 나오는 처리 방식
+    int getch(void)
+    {
+        struct termios oldt, newt;
+        int ch;
+        tcgetattr(STDIN_FILENO, &oldt);
+        newt = oldt;
+        newt.c_lflag &= ~(ICANON | ECHO);
+        tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+        ch = getchar();
+        tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+        return ch;
+    }
+    //--------
+    //Validation 정책에 관한 인터페이스를 설계한다.
+    struct Validator {
+        virtual ~Validate() {}
+        virtual bool Validate(const std::string& s, char c)
+            = 0;
+        virtual bool IsComplete(const std::string& s) = 0;
+    }
+    
+    class LineEdit {
+        std::string data;
+        
+        Validator* pValidator;
+    public:
+        LineEdit()
+            : pValidator(nullptr)
+            {
+                
+            }
+        void SetValidator(Validator* p) { pValidator = p; }
+        std::string GetData()
+        {
+            data.clear();
+    
+            while (1) {
+                // char c = getchar();
+                char c = getch();
+    
+                if (c == '\n' && (pValidator == nullptr || 
+                                  pValidator->IsComplete(data)))
+                    break;
+    
+                if (pValidator == nullptr || pValidatr->Validate(data.c)) {
+                    data.push_back(c);
+                    cout << c;
+                }
+            }
+    
+            cout << endl;
+            return data;
+        }
+    };
+    
+    //새로운 정책의 LineEdit가 필요하면
+    //정책 클래스의 Validator의 인터페이스를 기반으로 만들어줘야 한다.
+    
+    class LimitDigitValidator : public Validator {
+    	int limit;
+    public:
+        LimitDigitValidator(int n) : limit(n)
+        {
+        }
+        
+        boll Validate(const std::string& s, char c) override
+        {
+            return s.size() < limit && isdigit(c);
+        }
+        
+        boll IsComplete(const std::string& s) override{
+            return s.size() == limit;
+        }
+    }
+    
+    int main()
+    {
+        LineEdit edit;
+        
+        LimitDigitValidator v(5);
+        edit.SetValidator(&v);
+        while (1) {
+            string s = edit.GetData();
+            cout << "out: " << s << endl;
+        }
+    }
+    ```
+
+    - 원하는 것을 다른 클래스로 뽑아낸다
+
+      => 교체 가능한 인터페이스 기반 클래스로 뽑아낸다.
+
+      - Strategy Pattern(전략 패턴)이라 한다
+        - 실행시간의 정책을 변경하는 것이 가능하다
+          - LineEdit.SetValidator(...)
+        - Validator의 정책을 다른 클래스에서도 재사용 가능하다.
+
+### 단위 전략
+
+- ```c++
+  #if 0
+  
+  template <typename T>
+  class List{
+  public:
+      void push_front(const T& a) {}
+  };
+  
+  List<int> st;
+  //전역 변수
+  // 스레드 안전하게 접근할 수 있어야 한다.
+  
+  #endif
+  
+  //1 동기화 여부를 인터페이스 기반 다른 클래스로 분리하자
+  //	전략 패턴
+  struct Sync {
+   	virtual ~Sync() {}
+      
+      virtual void Lock() = 0;
+      virtual void Unlock() = 0;
+  };
+  
+  template <typename T>
+  class List{
+      Sync* pSync = nullptr;
+      
+  public:
+      void SetSync(Sync* p) { pSync = p; }
+      void push_front(const T& a)
+      {
+          pSync->Lock();
+          cout << "데이터 삽입" << endl;
+          pSync->Unlock();
+      }
+  };
+  
+  //동기화 정책의 인터페이스를 구현하는 클래스를 만든다
+  class MultiThread : public Sync {
+  public:
+      void Lock() override
+      {
+          //mutex.lock() 같은걸 호출
+          cout << "동기화 시작" << endl;
+      }
+      
+      void Unlock() override
+      {
+  		cout << "동기화 종료" << endl;
+      }
+  };
+  
+  class SingleTread : public Sync {
+      public:
+      void Lock() override {}
+      void Unlock() override {}
+  }
+  
+  List<int> st;
+  
+  MultiThread t;
+  
+  int main()
+  {
+      
+      // st.SetSync(new MulteThread);
+      //st.SetSync(new SingleThread);
+      st.SetSync(&t);
+      
+      st.push_front(10);
+  }
+  
+  ```
+
+- ```c++
+  //Template 기반의 정책 교체
+  
+  template <typename T, typename ThreadModel>
+  class List : public ThreadModel{
+  public:
+      void push_front(const& a)
+      {
+          Lock();
+          cout << "데이터 삽입" << endl;
+          Unlock();
+      }
+  };
+  
+  //스레드의 정책을 가지는 정책 클래스를 만든다.
+  class SingleThread {
+  public:
+      void Lock() {}
+      void Unlock() {}
+  };
+  
+  class MultiThread {
+  public:
+      void Lock() { cout << "동기화 시작" << endl; }
+      void Unlock() { cout << "동기화 종료" << endl; }
+  };
+  
+  List<int, MultiThread> s1;
+  
+  int main()
+  {
+      List<int, SingleThread> s2;
+  }
+  ```
+
+  - Policy Based Design(단위 전략)
+    - 장점
+      - 가상함수가 아니므로 인라인 함수이다
+      - 호출에 성능 저하가 없다
+    - 단점
+      - Template 인자이므로, 실행 시간에 정책 교체가 불가능하다
+      - 컴파일 할 때 정책이 결정된다.
+    - 정책을 담은 코드는 컴파일 시간에 생성하는 기술
+    - C++표준 라이브러리의 핵심 설계 
+
+​	
+
+### 함수화 전략
+
+- ```c++
+  bool cmp1(int a, int b) { return a > b; }//오름차순
+  bool cmp2(int a, int b) { return a < b; }//내림차순	cmp1, 2는 타입 동일
+  
+  void Sort(int* x, int n, bool (*cmp)(int a, int b))
+  {
+      for (int i = 0; i < n + 1; ++i)
+      {
+  		for(int j = i + 1; j < n; ++j)
+          {
+              if(x[i] > x[j])
+              	swap(x[i], x[j]);
+          }
+      }
+  }
+  
+  int main()
+  {
+      int x[10] = {1, 3, 5, 7, 9, 2, 4, 6, 8, 10};
+  	//Sort(x, 10);
+      Sort(x, 10, &cmp1);	//오름차순으로 수행
+      Sort(x, 10, &cmp2);	//내림차순으로 수행
+      
+      for(int s : x){
+          cout << s << endl;
+      }
+  }
+  ```
+
+  - 핵심 - 변하지 않는 전체 알고리즘에서 변해야하는 정책 코드는 분리되어야 한다.
+    - 일반 함수에서는 변하는 것을 함수 인자(함수 포인터)로 뽑아내면 된다.
+
+- ```c++
+  //인라인 함수와 함수 포인터
+  // 인라인 치환은 컴파일 시간 문법
+  // 인라인 함수라도 함수 포인터에 담아서 호출하면, 인라인 치환 될 수 없다.
+  // (함수 포인터도 변수이므로 실행 시간에 변할 수 있다.)
+  void foo() {}
+  inline void goo() {}
+  
+  int main()
+  {
+      foo();
+      goo();
+  
+      void (*f){} = &foo;
+      f = &goo;
+      
+      //함수 포인터를 통해서 호출
+      // f가 어떤 함수를 가르킬지 컴파일 시간에 판단할 수 없다.
+      (*f){};
+      f();
+  }
+  ```
+
+- ```c++
+  class A{
+  };
+  class B{  
+  };
+  
+  void foo() {}
+  void goo() {}
+  
+  //함수처럼 사용 가능한 객체 ==> 함수 객체
+  struct Plus{
+      int operator()(int a, int b) const
+      {
+          return a + b;
+      }
+  };
+  
+  struct Minus{
+      int operator()(int a, int b) const
+      {
+          return a - b;
+      }
+  }
+  
+  int main()
+  {
+  	Plus plus;
+      
+      int reslut = plus(10, 20);
+      //plus.operator()(10, 20);
+      
+      cout << result << endl;
+  }
+  ```
+
+  - 함수는 자신만의 타입이 없다.
+    - 함수의 시그니처(인자 정보, 반환 타입) 가 동일한 모든 함수는 같은 타입이다.
+  - 함수 객체는 자신만의 타입이 있다.
+    - 시그니처가 동일해도 모든 함수 객체는 다른 타입이다.
+
+- ```c++
+  //함수 객체 버전
+  struct Less{
+      bool operator()(int a, int b) const ( return a > b; )
+  };
+  
+  struct Greater{
+      bool operator()(int a, int b) const ( return a < b; )
+  };
+  
+  //함수 버전
+  bool cmp1(int a, int b) { return a > b; }//오름차순
+  bool cmp2(int a, int b) { return a < b; }//내림차순	cmp1, 2는 타입 동일
+  
+  template <typename T>
+  void Sort(int* x, int n, T cmp)
+  {
+      for (int i = 0; i < n + 1; ++i)
+      {
+  		for(int j = i + 1; j < n; ++j)
+          {
+              if(x[i] > x[j])
+              	swap(x[i], x[j]);
+          }
+      }
+  }
+  
+  int main()
+  {
+      int x[10] = {1, 3, 5, 7, 9, 2, 4, 6, 8, 10};
+  	Less less;
+      Greater greater;
+      //함수 객체로 전달
+      //장점 : 정책이 호출되는 것이 아니라 인라인 치환되므로 빠르다
+      //단점 : 코드를 생성한다.
+      Sort(x, 10, less);	//Sort(int&, int, Less)
+      Sort(x, 10, greater);	//Sort(int& int, Greater)
+      //함수 포인터로 전달
+      //장점 : 한개의 생성된 함수를 공유해서 사용한다 - 코드 메모리 사용량이 증가하지 않음
+      //단점 : 호출 오버헤드가 있음
+      //		인라인 치환이 불가능하다
+      Sort(x, 10, &cmp1);	//Sort(int*, int, bool(*)(int, int)
+      Sort(x, 10, &cmp2);	//Sort(int*, int, bool(*)(int, int)
+      
+      for(int s : x){
+          cout << s << endl;
+      }
+  }
+  ```
+
+  - 정책을 함수 포인터로 전달 가능하고, 자신만의 타입을 가지는 함수 객체도 사용할 수 있다.
+    - 이것이 정책을 템플릿 인자로 전달하는 이유
+
+- ```c++
+  bool cmp1(int a, int b) { return a > b; }//오름차순
+  bool cmp2(int a, int b) { return a < b; }//내림차순	cmp1, 2는 타입 동일
+  
+  #include <algorithm> //이미 정책 변경 가능한 sort 가 안에 존재
+  
+  #include <functional>	//less<>, greater<> 함수 객체가 있다.
+  
+  int main()
+  {
+  	int x[10] = {1, 3, 5, 7, 9, 2, 4, 6, 8, 10};
+      
+      sort(x, x + 10);
+      sort(x, x + 10, &cmp1);
+      
+      sort(x, x + 10, l);
+      sort(x, x + 10, g);
+      
+      for (int s : x){
+          cout << s << endl;
+      }
+  }
+  ```
+
+- ```c++
+  #include <algorithm>
+  
+  bool cmp(int a, int b) { return a > b; }
+  
+  struct Less {
+      bool operator()(int a, int b) const ( return a > b; )
+  };
+  
+  int main()
+  {
+      int x[] = {1, 3, 5, 7, 9, 2, 4, 6, 8, 10};
+    	
+      sort(x, x + 10, &cmp);
+      
+      Less less;
+      sort(x, x + 10, less);
+      
+      //함수 객체를 쉽게 만드는 문법
+      // => 람다(lambda) : 코드 블록을 참조하는 기술
+      // C++11의 문법으로 지원
+      // C++에서는 익명의 함수 객체를 생성하는 기술
+      //람다는 클로저(Clojure)를 지원
+      sort(x, x + 10, [](int a, int b) { return a > b;})	//람다 함수
+          
+      for (auto e : x)
+      {
+          cout << e << endl;
+      }
+  }
+  ```
+
+### Composit
+
+- ```c++
+  #include <iostream>
+  #include <string>
+  #include <vector>
+  using namespace std;
+  
+  // 1. File / Folder
+  //  => 공통의 부모: Item
+  //  => 다형성: GetSize()
+  //   * 폴더는 내부의 파일의 크기의 총 합을 통해 구해집니다.
+  //   * 파일은 자신의 크기 정보를 가지고 있습니다.
+  
+  class Item {
+      std::string name;
+  
+  public:
+      Item(const std::string& s)
+          : name(s)
+      {
+      }
+  
+      virtual ~Item() { } // !!
+  
+      virtual int GetSize() const = 0;
+  
+      std::string GetName() const { return name; }
+  };
+  
+  class File : public Item {
+      int fileSize;
+  
+  public:
+      File(const std::string& s, int size)
+          : Item(s)
+          , fileSize(size)
+      {
+      }
+  
+      ~File()
+      {
+          cout << GetName() << " 파일 삭제" << endl;
+      }
+  
+      int GetSize() const override
+      {
+          return fileSize;
+      }
+  };
+  
+  class Folder : public Item {
+      std::vector<Item*> v; // 재귀적 합성
+  
+  public:
+      ~Folder()
+      {
+          // 자신이 소유한 모든 객체에 대해서 메모리 해지해 주어야 합니다.
+          for (auto e : v)
+              delete e;
+  
+          cout << GetName() << " 폴더 삭제" << endl;
+      }
+  
+      Folder(const std::string& s)
+          : Item(s)
+      {
+      }
+  
+      void AddItem(Item* p)
+      {
+          v.push_back(p);
+      }
+  
+      int GetSize() const override
+      {
+          int sum = 0;
+          for (auto e : v) {
+              sum += e->GetSize();
+          }
+  
+          return sum;
+      }
+  };
+  
+  int main()
+  {
+      Folder* fol1 = new Folder("ROOT");
+      Folder* fol2 = new Folder("A");
+  
+      File* f1 = new File("a.txt", 10); // 이름, 크기
+      File* f2 = new File("b.txt", 20);
+  
+      fol2->AddItem(f1);
+      fol1->AddItem(f2);
+      fol1->AddItem(fol2);
+      cout << f2->GetSize() << endl;
+      cout << fol2->GetSize() << endl;
+      cout << fol1->GetSize() << endl;
+  
+      delete fol1;
+  }
+  ```
+
+### Menu
+
+- ```c++
+  #include <iostream>
+  #include <string>
+  #include <vector>
+  using namespace std;
+  
+  // 아래의 코드는 Composite Pattern으로 구현되었습니다.
+  //  - Composite(복합)
+  //  1) MenuItem(개별 객체) / PopupMenu(복합 객체)
+  //  2) 복합 객체는 개별 객체와 복합 객체를 모두 보관할 수 있다.
+  //   => 복합 객체와 개별 객체가 공통의 부모를 가지고 있어야 한다.
+  //  3) 복합 객체와 개별 객체의 사용법이 동일하다.
+  //   => 다형성!!!
+  
+  // MenuItem과 PopupMenu의 공통의 부모입니다.
+  // > MenuItem과 PopupMenu가 제공하는 공통의 기능이 반드시 부모 클래스로부터
+  //   비롯되어야 합니다.
+  class BaseMenu {
+      std::string title;
+  
+  public:
+      BaseMenu(const std::string& s)
+          : title(s)
+      {
+      }
+  
+      std::string GetTitle() const { return title; }
+  
+      virtual void Command() = 0;
+  };
+  
+  class MenuItem : public BaseMenu {
+  
+  public:
+      MenuItem(const std::string& s)
+          : BaseMenu(s)
+      {
+      }
+  
+      void Command() override
+      {
+          cout << "메뉴 선택되었음 : " << GetTitle() << endl;
+          getchar();
+          getchar();
+      }
+  };
+  
+  // PopupMenu는 MenuItem도 가지고 있고, PopupMenu도 가지고 있습니다.
+  // >
+  class PopupMenu : public BaseMenu {
+      std::vector<BaseMenu*> v; // 핵심!!
+  
+  public:
+      PopupMenu(const std::string& s)
+          : BaseMenu(s)
+      {
+      }
+  
+      void AddMenu(BaseMenu* p)
+      {
+          v.push_back(p);
+      }
+  
+      // 자기 자신이 가지고 있는 모든 메뉴를 화면에 보여줍니다.
+      void Command() override
+      {
+          while (1) {
+              system("clear");
+  
+              int size = v.size();
+  
+              for (int i = 0; i < size; ++i) {
+                  cout << i + 1 << ". " << v[i]->GetTitle() << endl;
+              }
+              cout << size + 1 << ". 상위 메뉴로" << endl;
+  
+              cout << "메뉴를 선택하세요 >> ";
+              int cmd;
+              cin >> cmd;
+  
+              if (cmd == size + 1) {
+                  break;
+              }
+  
+              if (cmd < 1 || cmd > size + 1) {
+                  continue;
+              }
+  
+              v[cmd - 1]->Command(); // 다형성!!!
+          }
+      }
+  };
+  
+  int main()
+  {
+      PopupMenu* menubar = new PopupMenu("Menubar");
+      PopupMenu* file = new PopupMenu("파일");
+      PopupMenu* edit = new PopupMenu("편집");
+      menubar->AddMenu(file);
+      // menubar->AddMenu(edit);
+      file->AddMenu(edit);
+  
+      file->AddMenu(new MenuItem("새 파일"));
+      file->AddMenu(new MenuItem("저장"));
+      file->AddMenu(new MenuItem("불러오기"));
+  
+      edit->AddMenu(new MenuItem("잘라내기"));
+      edit->AddMenu(new MenuItem("복사"));
+      edit->AddMenu(new MenuItem("붙여넣기"));
+  
+      menubar->Command();
+  }
+  ```
+
 - 
+
+### MenuEvent
+
+- ```c++
+  class MenuItem {
+      std::string title;
+  
+  public:
+      MenuItem(const std::string& s)
+          : title(s)
+      {
+      }
+  
+      virtual void Command()
+      {
+          cout << title << " 메뉴가 선택됨" << endl;
+          // 핵심: 메뉴가 선택된 사실을 다시 외부에 알려야 한다.
+          // "객체가 외부로 이벤트를 발생한다." 라고 표현합니다.
+      }
+  };
+  
+  int main()
+  {
+      MenuItem m1("저장");
+      MenuItem m2("불러오기");
+  
+      m1.Command();
+      m2.Command();
+  }
+  ```
+
+- ```c++
+  // 1. 인터페이스 기반 리스너 개념
+  //   : Java(Android, JavaFX, SWT, AWT)
+  
+  // 메뉴를 처리하고 싶은 모든 클래스는 아래 인터페이스를 구현해야 합니다.
+  struct OnMenuListener {
+      virtual ~OnMenuListener() { }
+  
+      // virtual void OnCommand() = 0;
+      virtual void OnCommand(int id) = 0;
+  };
+  
+  class MenuItem {
+      int id;
+      std::string title;
+  
+      OnMenuListener* pListener;
+  
+  public:
+      MenuItem(int i, const std::string& s)
+          : id(i)
+          , title(s)
+          , pListener(nullptr)
+      {
+      }
+  
+      void SetListener(OnMenuListener* p) { pListener = p; }
+  
+      virtual void Command()
+      {
+          cout << title << " 메뉴가 선택됨" << endl;
+          // 핵심: 메뉴가 선택된 사실을 다시 외부에 알려야 한다.
+          // "객체가 외부로 이벤트를 발생한다." 라고 표현합니다.
+  
+          if (pListener)
+              pListener->OnCommand(id);
+      }
+  };
+  
+  class Dialog : public OnMenuListener {
+  public:
+      void Save()
+      {
+          cout << "Dialog Save" << endl;
+      }
+  
+      void Load()
+      {
+          cout << "Dialog Load" << endl;
+      }
+  
+      // 인터페이스 기반의 리스너는 수신하는 객체의 약속된 메소드를 호출하기 때문에, 호출된 메소드 안에서 어떤 객체로부터 이벤트가 발생하는지 구분할 수 없습니다.
+      // => 구분 가능하도록 만들어주어야 합니다.
+      void OnCommand(int id) override
+      {
+          if (id == 0x100)
+              Save();
+          else if (id == 0x200)
+              Load();
+      }
+  };
+  
+  int main()
+  {
+      Dialog dlg;
+      MenuItem m1(0x100, "저장");
+      MenuItem m2(0x200, "불러오기");
+  
+      m1.SetListener(&dlg);
+      m2.SetListener(&dlg);
+  
+      m1.Command();
+      m2.Command();
+  }
+  ```
+
+- ```c++
+  #include <iostream>
+  #include <string>
+  using namespace std;
+  //2. 함수 포인터 기반의 이벤트 처리 방법
+      // 자바를 제외한 모든 플랫폼에서 사용된다.
+      // iOS(Target-Action) / C# Delegate /MFC MessageMap ...
+      // 핸들러 기반 이벤트 처리 방법이라고 한다.
+  	//	일반 함수와 멤버 함수를 묶어서 관리할 수 있는 범용 함수 포인터 개념을 제공한다.
+  
+  class Dialog {
+  public:
+      void Open() { cout << "Dialog Open" << endl; }
+      void Close() { cout << "Dialog Close" << endl; }
+  };
+  
+  //문제점
+  // Dialog 멤버 함수만 사용할 수 있다
+  // 일반 함수도 사용할 수 없다.
+  class MenuItem {
+      std::string title;
+      
+  	//멤버 함수 포인터
+      //void (Dialog::*handler)() = nullptr;
+      //Dialog* object = nullptr;
+      void (Dialog::*handler)();
+      Dialog* object;
+  public:
+      void SetHandler(void (Dialog::*h)(), Dialog* obj)
+      {
+          handler = h;
+          object = obj;
+      }
+      
+      MenuItem(const std::string& s)
+          : title(s)
+      {
+      }
+  
+      virtual void Command()
+      {
+          cout << title << " 메뉴가 선택됨" << endl;
+          // 핵심: 메뉴가 선택된 사실을 다시 외부에 알려야 한다.
+          // "객체가 외부로 이벤트를 발생한다." 라고 표현합니다.
+          
+          if(object == nullptr || handler == nullptr)
+              return;
+          
+          (object->*handler());
+      }
+  };
+  
+  int main()
+  {
+      Dialog dlg;
+      void (Dialog::*fp)() = &Dialog::Open:
+      fp = &Dialog::Close;
+      
+  	(dlg.*fp)();
+      (p->*fp)();
+      
+      MenuItem m1("저장");
+      MenuItem m2("불러오기");
+      
+      m1.SetHandler(&Dialog::Open, &dlg);
+      m2.SetHandler(&Dialog::Close, &dlg);
+  
+      m1.Command();
+      m2.Command();
+  }
+  ```
+
+- ```c++
+  //일반 함수 포인터와 멤버 함수 포인터는 다른 개념
+  // 간접층의 원리
+  //	소프트웨어의 난제는 간접층을 도입함으로써 문제를 해결할 수 있습니다.
+  
+  void foo() { cout << "foo" << endl; }
+  
+  //3. FunctionCommand 와 MemberCommand의 공통의 부모를 설계한다.
+  struct ICommand {
+      virtual ~ICommand() {}
+      
+      virtual void Execute() = ;
+  };
+  
+  class FunctionCommand : public ICommand{
+  public:
+      using HANDLER = void(*)();
+      HANDLER hander;
+      
+      FunctionCommand(HANDLER h) : handler(h)
+      {}
+      
+      void Execut() { (*handler)(); }
+  };
+  
+  template <typename T>
+  class MemberCommnad : public ICommand {
+  private:
+      using HANDLER = void (T::*)();
+      HANDLER handler;
+      T* object;
+  
+  public:
+  	MemberCommand(HANDLER h, T* o)
+          : handler(h)
+          , object(o)
+          {}
+  };
+  
+  //1. 일반 함수 포인터 역할을 수행하는 클래스를 설계한다.
+  #if 0
+  class FunctionCommand{
+  public:
+      using HANDLER = void(*)();
+      HANDLER hander;
+      
+      FunctionCommand(HANDLER h) : handler(h)
+      {}
+      
+      void Execut() { (*handler)(); }
+  };
+  #end if
+  
+  //2 멤버 함수 포인터 역할을 수행하는 클래스를 설계한다.
+  // 모든 클래스 타입의 멤버 함수를 참조할 수 있어야 한다.
+  //	템플릿 기반으로 설곟나다.
+  template <typename T>
+  class MemberCommnad {
+  private:
+      using HANDLER = void (T::*)();
+      HANDLER handler;
+      T* object;
+  
+  public:
+  	MemberCommand(HANDLER h, T* o)
+          : handler(h)
+          , object(o)
+          {}
+  };
+  class FunctionCommand{
+  public:
+      using HANDLER = void(*)();
+      HANDLER hander;
+      
+      FunctionCommand(HANDLER h) : handler(h)
+      {}
+      
+      void Execut() { (*handler)(); }
+  };
+  
+  class Dialog {
+  public:
+      void Open() { cout << "Dialog Open" << endl; }
+  };
+  
+  //4. 클래스 템플릿은 타입 추론이 동작하지 않는다.
+  //	함수 템플릿은 타입 추론이 동작한다.
+  //	클래스를 생성하는 함수 템플릿을 제공한다.
+  template <typename T>
+  MemberCommand<T>* cmd(void (T::*h)(), T* obj)
+  {
+      return new MemberCommand<T>(h, obj);
+  }
+  
+  //5. 일관성을 위해서 FunctionCommand를 생성하는 함수도 제공한다.
+  FunctionCommand* cmd(void (*f)())
+  {
+      return new FunctionCommand(f);
+  }
+  
+  #if 0
+  int main()
+  {
+      Dialog dlg;
+      //클래스 템플릿은 타입 추론이 불가능하다
+      //T의 타입을 명시적으로 지정해줘야 한다.
+      MemberCommand<Dialog> f2(Dialog::Open, &dlg);
+      
+      FunctionCommand f1(&foo);
+      f1.Execute();
+      
+      ICommand* fp = new FunctionCommand(&foo);
+      fp->Execute();
+      
+      fp = new MemberCommnd<Dialog>(&Dialog::Open, &dlg);
+      fp = cmd(&Dialog::Open, &dlg);
+      fp->Execute();
+  }
+  #endif
+  
+  class MenuItem {
+      std::string title;
+      
+      ICommand* pCommnad;
+  
+  public:
+      MenuItem(const std::string& s)
+          : title(s)
+      {
+      }
+  
+      void SetCommand(ICommand* p)
+      {
+          pCommand = p;
+      }
+      
+      virtual void Command()
+      {
+          //cout << title << " 메뉴가 선택됨" << endl;
+          // 핵심: 메뉴가 선택된 사실을 다시 외부에 알려야 한다.
+          // "객체가 외부로 이벤트를 발생한다." 라고 표현합니다.
+          if (pCommand)
+              pCommand->Execute();
+      }
+  };
+  
+  int main()
+  {
+      MenuItem m1("저장");
+      MenuItem m2("불러오기");
+  
+      m.SetCommand(cmd(&foo));
+      
+      Dialog dlg;
+      m2.SetCommand(cmd(&Dialog::Open, &dlg))
+      
+      m1.Command();
+      m2.Command();
+  }
+  ```
+
+- ```c++
+  // 이미 C++ 표준에 잘 만들어진 범용 함수 포인터 타입이 존재합니다.
+  
+  #include <iostream>
+  using namespace std;
+  
+  #include <functional> // std::function
+  
+  void foo()
+  {
+      cout << "foo" << endl;
+  }
+  
+  class Dialog {
+  public:
+      void Open() { cout << "Open" << endl; }
+  };
+  
+  class MenuItem {
+      std::string title;
+  
+      function<void()> pCommand;
+  
+  public:
+      MenuItem(const std::string& s)
+          : title(s)
+      {
+      }
+  
+      void SetCommand(function<void()> p)
+      {
+          pCommand = p;
+      }
+  
+      virtual void Command()
+      {
+          pCommand();
+      }
+  };
+  
+  int main()
+  {
+      Dialog dlg;
+  
+      MenuItem m1("foo");
+      MenuItem m2("Dialog open");
+  
+      m1.SetCommand(&foo);
+      m2.SetCommand(bind(&Dialog::Open, &dlg));
+  
+      m1.Command();
+      m2.Command();
+  
+  #if 0
+      function<void()> f;
+      f = &foo;
+      f();
+  
+      f = bind(&Dialog::Open, &dlg);
+      f();
+  #endif
+  }
+  ```
+
+
+
+### Container
+
+- ```c++
+  //단위 연결 리스트 기반 컨테이너를 설계
+  struct Node{
+      int data;
+      Node* next;
+      
+      Node(int a, Node* n) : data(a), next(n) {}
+  };
+  
+  class Slist{
+  	Node* head;
+      
+  public:  
+      Slist()
+          : head(nullptr)
+          {}
+      
+      void push_front(int a){ head = new Node(a, head); }
+      
+      int front() { return head->data; }
+  };
+  
+  int main()
+  {
+      Slist s;
+      s.push_front(10);
+      s.push_front(20);
+      s.push_front(30);
+      
+      int n = s.front();
+      cout << n << endl;
+  }
+  ```
+
+- ```c++
+  //Object 기반 컨테이너
+  // 모든 클래스는 Object의 자식이어야 한다.
+  
+  class Object {
+  public:
+      virtual ~Object() {}
+  };
+  
+  class Dialog : public Object{
+  };
+  class Rect : public Object{
+  };
+  
+  struct Node{
+      Object data;
+      Node* next;
+      
+      Node(Object a, Node* n) : data(a), next(n) {}
+  };
+  
+  class Slist{
+  	Node* head;
+      
+  public:  
+      Slist()
+          : head(nullptr)
+          {}
+      
+      void push_front(Object a){ head = new Node(a, head); }
+      
+      Object front() { return head->data; }
+  };
+  
+  //문제점
+  // 1)컨테이너에 일반적으로 하나의 타입을 저장하는 편이 좋다
+  //	-다른 종류의 다입을 넣어도 컴파일 오류가 발생하지 않음 = 타입 안정성이 떨어진다.
+  // 2)객체가 아닌 표준 타입(primitive type, built-in type)은 저장할 수 없다
+  //	- int, char, double, float, long ...
+  //	  객체 클래스가 필요하다
+  //		Java, C#에서 제공하는 개념
+  // 3)데이터를 꺼내올 때마다 다운 캐스팅이 필요하다
+  
+  //장점
+  //	-템플릿 기반이 아니기 때문에 메모리 사용량이 효율적이다
+  
+  class Integer : public Object{
+      int value;
+  public:
+      Integer(int n) : value(n)
+      {}
+  }
+  
+  int main()
+  {
+      Slist s;
+      
+  	s.push_front(new Dialog);
+      s.push_front(new Rect);
+      s.push_front(new Integer(42));
+      
+  	Integer* p = dynamic_cast<Integer*>(s.front());
+      //반듣시 다운 캐스팅이 필요하다.
+      if (p) {
+          cout << p->GetValue() << endl;
+      }
+  }
+  ```
+
+- ```c++
+  //템플릿 기반 컨테이너를 설계
+  //장점 - 타입 안정성이 뛰어나고, 객체 뿐 아니라 표준 타입도 저장 가능
+  //	    꺼낼 때 캐스팅도 필요하지 않다
+  //단점 - 템플릿 이므로 여러가지 타입을 동시에 사용하면 list의 기계어 코드가 많아진다.
+  //		코드 메모리 사용량이 오버헤드가 있다.
+  template <typename T>
+  struct Node{
+      T data;
+      Node* next;
+      
+      Node(const &T a, Node* n) : data(a), next(n) {}
+  };
+  
+  class Slist{
+  	Node* head;
+      
+  public:  
+      Slist()
+          : head(nullptr)
+          {}
+      
+      void push_front(const& T a){ head = new Node(a, head); }
+      
+  	const& T front() { return head->data; }
+  };
+  
+  int main()
+  {
+      Slist s;
+      s.push_front(10);
+      s.push_front(20);
+      s.push_front(30);
+      
+      int n = s.front();
+      cout << n << endl;
+  }
+  ```
+
+- ```c++
+  //컨테이너 설계 기술 > Thin Template
+  //1) void* 를 기반으로 만듦
+  struct Node{
+      void* data;
+      Node* next;
+      
+      Node(void* a, Node* n) : data(a), next(n) {}
+  };
+  
+  class SlistImpl{
+  	Node* head;
+      
+  public:  
+      SlistImpl()
+          : head(nullptr)
+          {}
+      
+      void push_front(void* a){ head = new Node(a, head); }
+      
+      void* front() { return head->data; }
+  };
+  
+  //SlistImple을 직접 사용할 경우 캐스팅에 대한 코드가 불편하다
+  //사용자가 편리하게 사용할 수 있도록 Template으로 자식 클래스를 제공한다.
+  // =>Thin Template
+  // =>inline을 사용할 경우, 치환되는 함수에 대해 코드 메모리에 존재하지 않는다.
+  // =>SlistImple의 구현을 물려받지만, 인터페이스는 물려받지 않아야 한다.
+  
+  template <typename T>
+  class Slist : public SlilstImpl {
+  public:
+      inline void push_front(const T& a)
+      {
+          //&s => const T* =/> void*
+          //&s => const T* => const_cast를 통해 const 제거 => T* => void*        
+          SlistImpl::push_front(const_cast<T*>(&a));
+      }
+      inline T& front() {
+          //void* => static_cat => T* => * => T&
+  		return *(static_cast<T*>(SlistImpl::front()));
+      }
+  }
+  
+  int main()
+  {
+      Slist<int> a;
+      s.push_front(10);
+      s.push_front(20);
+      s.push_front(30);
+      
+      int n = s.front();
+      cout << n << endl;
+  }
+  ```
+
+### SmartPointer
+
+- ```c++
+  class Car {
+  public:
+      ~Car() { cout << "Car 객체 파괴" << endl; }
+      void o() { cout << "Car go" << endl; };
+  };
+  
+  //스마트 포인터 : 임의의 객체가 다른 클래스의 포인터의 역할을 하는 것
+  //객체
+  //	생성자, 소멸자, 멤버 함수
+  //Proxy Pattern = 대리자 패턴 - 직접적으로 처리했을시 문제가 생기는 것을 간접적으로 처리해줌
+  //장점 - 진짜 포인터가 아니라 객체
+  //		생성/소멸/대입/복사 등의 몸든 과정에 대해 제어가 가능
+  //		대표적인 활동이 소멸자에서의 자동 삭제 기능이다
+  template <typename T>
+  class Ptr {
+  	//Car obj;
+      T* obj;;
+  public:
+      Ptr(T* p = nullptr) : obj(p) {}
+      ~Ptr() { delete obj; }	//소멸자 실행 시 자동적으로 소멸
+      
+      T* operator->()	//연산자 오버로딩
+      {
+          return obj;
+      }
+      
+      T& operator*()	//연산자 오버로딩
+      {
+          return obj;
+      }
+  };
+  
+  int main()
+  {
+      Ptr<Car> p = new Car;	//p객체는 소멸자 실행시 자동적으로 소멸된다.
+      p->Go();
+      (*p).Go();
+  }
+  
+  #if 0
+  int main()
+  {
+      Car* p = new Car;
+      p->Go();
+      
+      delete p;
+  }
+  #endif
+  ```
+
+
+
+### 일반적 프로그래밍
+
+- ```c++
+  //C++ 표준 라이브러리를 이해하기 위해서는 일반화(Generic)을 이해해야한다.
+  //C++ = 객체지향 + 일반화
+  
+  #if 0
+  char* xstrchr(char& s, char c)
+  {
+      while(*s != '\0' && *s != c)
+          s++;
+      
+      return *s == c ? s : NULL;
+  }
+  
+  
+  int main()
+  {
+      char s() = "abcdefg";
+      
+      char *p = xstrchr(s, 'c');
+      
+      if (p)
+          cout << *p << endl;
+  }
+  #endif
+  
+  
+  //1. 검색 구간의 일반화
+  // 전체 구간에서 부분 구간에 대해 검색이 가능해야 한다.
+  // 검색할 구간의 시작과 검색할 구간의 마지막 다음 위치를 인자로 전달받도록 해야한다.
+  
+  //first : x
+  //|
+  //abcdefg
+  //			|
+  //			last : x + 7
+  // (fitst, last) : 반개구간
+  
+  #if 0
+  char* xstrchr(char& first, char last, char value)
+  {
+      while (first != last && *first != value)
+          ++first;
+      //return first == last ? nullptr : first;
+      return first;
+  }
+  #endif
+  
+  //2. 검색 대상 타입의 일반화
+  //T* xfind(T* first, T* last, T value)
+  //	문제점 - T*라고 하면, 포인터 타입만 가능
+  //	구간의 타입과 요소의 타입을 분리하는 것은 double 배열 안에서 int 타입을 찾는 것도 가능
+  
+  template <typename T1, typename T2>
+  T1* xfind(T1* first, T1* last, T2 value)
+  {
+      while (first != last && *first != value)
+          ++first;
+      //return first == last ? nullptr : first;
+      return first;
+  }
+  
+  #include <vector>
+  
+  int main()
+  {
+      vector<int> v = {1, 2, 3, 4, 5 }; //C++11
+      
+      auto p2 = xfind(v.begin(), v.end(), 3);
+      if (p2 != v.end())
+          cout << *p2 < endl;
+      
+      char s() = "abcdefg";
+      
+      char *p = xfind(s + 2, s + 5, 'c');
+      
+      if (p != s + 5) // 성공
+          cout << *p << endl;
+  }
+  ```
+
+### iterator
+
+- ```c++
+  //반복자 - iterator Pattern
+  //컨테이너 요소를 순회하는 객체
+  
+  template <typename T>
+  struct Node{
+      T data;
+      Node* next;
+      
+      Node(const &T a, Node* n) : data(a), next(n) {}
+  };
+  
+  template <typename T>
+  class SlistIterator {
+      Node<T> current;
+  public:
+      SlistIterator(Node<T>* p = nullptr) : current(p)
+      {}
+      
+      inline SilistIterator& operator++()
+      {
+          current = current->next;
+          return *this;
+      }
+      
+      inline T& operator*() { return current->data; }
+      
+      inline bool operator==(const SlistIterator& t)
+      {
+          return current == t.current;
+      }
+      
+      inline bool operator==(const SlistIterator& t)
+      {
+          return current != t.current;
+      }
+  };
+  //모든 컨테이너의 설계자는 자신의 처음과 끝 다음을 가르키는 반복자를 꺼내는 연산을 제공해야 한다.
+  //begin() / end()
+  //	자신의 iterator 타입을 컨테이너 내부 타입의 이름을 통해 알려야 한다.
+  template <typename T>
+  class Slist{
+  	Node* head;
+      
+  public:  
+      using iterator = SllistIterator<T>;
+      
+      Slist()
+          : head(nullptr)
+          {}
+      
+      SlistIterator<T> begin() { return SlistIterator<T>(head); }
+      SlistIterator<T> end() { return SilstIterator<T>(); }
+      void push_front(const& T a){ head = new Node(a, head); }
+      
+  	const& T front() { return head->data; }
+  };
+  
+  int main()
+  {
+      Slist<int> s;
+      s.push_front(10);
+      s.push_front(20);
+      s.push_front(30);
+  	
+      Slist<int>::iterator p = xfind(s.begin(), s.end(), 20);
+      if (p != s.end()) {
+          cout << *p << endl;
+      }
+  }
+  
+  #if 0
+  int main()
+  {
+      Slist<int> s;
+      s.push_front(10);
+      s.push_front(20);
+      s.push_front(30);
+      
+      //SlistIterator<int> sp = a.begin();
+      Slist<int>::iterator sp = s.begin();//using~을 통해 다음과 같은 방식으로 표현 가능하게 됨
+      cout << *sp << endl;
+      
+      ++sp;
+      cout << *sp << endl;
+      
+      int x[5] = { 1, 2, 3, 4, 5 };
+      int* p = x;
+      int* p2 = x + 1;
+      
+      ++p;
+      if (p == p2){
+          cout << "같은 위치" << endl;
+      }
+      
+      cout << *p << endl;
+  }
+  #end if
+  ```
+
+- ```c++
+  #include <iostream>
+  using namespace std;
+  
+  // 반복자 설계 방법.
+  // 1. C++
+  //   - 연산자 오버로딩(++, *, ==, !=)
+  //   - begin / end
+  //
+  // 2. 인터페이스 기반으로 약속됩니다.
+  
+  template <typename T>
+  struct Node {
+      T data;
+      Node* next;
+  
+      Node(const T& a, Node* n)
+          : data(a)
+          , next(n)
+      {
+      }
+  };
+  
+  // 반복자가 구현해야 하는 인터페이스
+  template <typename T>
+  struct Iterator {
+      virtual ~Iterator() { }
+  
+      // 다음 요소가 존재하는지를 확인하는 함수
+      virtual bool HasNext() = 0;
+      // 현재 값을 반환하고, 다음 위치로 이동합니다.
+      virtual T& Next() = 0;
+  };
+  
+  template <typename T>
+  class SlistIterator : public Iterator<T> {
+      Node<T>* current;
+  
+  public:
+      SlistIterator(Node<T>* p = nullptr)
+          : current(p)
+      {
+      }
+  
+      bool HasNext() override { return current != nullptr; }
+  
+      T& Next() override
+      {
+          Node<T>* temp = current;
+          current = current->next;
+          return temp->data;
+      }
+  };
+  
+  // 컨테이너가 구현해야 하는 인터페이스
+  template <typename T>
+  struct Iterable {
+      virtual ~Iterable() { }
+  
+      virtual Iterator<T>* GetIterator() = 0;
+  };
+  
+  template <typename T>
+  class Slist {
+      Node<T>* head;
+  
+  public:
+      Slist()
+          : head(nullptr)
+      {
+      }
+  
+      void push_front(const T& a) { head = new Node<T>(a, head); }
+  
+      const T& front() { return head->data; }
+  };
+  
+  //정리
+  //반복자(Iterator Pattern)
+  // : 컨테이너(복합 객체)의 내부 구조에 상관 없이 요소를 열거하는 객체를 의미한다
+  
+  #include <list>
+  #include <vector>
+  
+  int main()
+  {
+      list<int> l = {1, 2, 3, 4, 5 };
+      vector<int> v = { 1, 2, 3, 4, 5 };
+  	
+      auto p = v.begin();
+      while (p != v.end()) {
+          cout << * << endl;
+          p++;
+      }
+      
+      Slist<int> s;
+      s.push_front(10);
+      s.push_front(20);
+      s.push_front(30);
+      
+      Iterator<int>* iter = s.GetIterator();
+      while (iter->HasNext()) {
+          cout << iter->hasnext() << endl;
+      }
+  }
+  ```
+
+
+
+### 방문자
+
+- ```c++
+  // 방문자 패턴(Visitor Pattern)
+  // : 컨테이너(복합 객체)의 내부 구조에 상관없이 요소에 연산을 수행하는 객체
+  
+  // => 기존 메뉴 코드를 수정하지 않고 새로운 기능의 추가를 달성할 수 있습니다.
+  
+  class PopupMenu;
+  class MenuItem;
+  
+  struct MenuVisitor {
+      virtual ~MenuVisitor() { }
+  
+      virtual void Visit(PopupMenu* p) = 0;
+      virtual void Visit(MenuItem* p) = 0;
+  };
+  
+  // 방문자를 통해서 연산을 수행하도록 만들어주기 위해서는 아래 인터페이스를 구현해야 합니다.
+  struct MenuAcceptor {
+      virtual ~MenuAcceptor() { }
+  
+      virtual void Accect(MenuVisitor* visitor) = 0;
+  };
+  
+  class BaseMenu : public MenuAcceptor {
+      std::string title;
+  
+  public:
+      BaseMenu(const std::string& s)
+          : title(s)
+      {
+      }
+  
+      virtual ~BaseMenu() { }
+  
+      std::string GetTitle() const { return title; }
+  
+      //-----
+      void SetTitle(const std::string& s) { title = s; }
+      //-----
+  
+      virtual void Command() = 0;
+  };
+  
+  class MenuItem : public BaseMenu {
+  
+  public:
+      MenuItem(const std::string& s)
+          : BaseMenu(s)
+      {
+      }
+  
+      //-----
+      void Accect(MenuVisitor* visitor) override
+      {
+          visitor->Visit(this);
+      }
+      //-----
+  
+      void Command() override
+      {
+          cout << "메뉴 선택되었음 : " << GetTitle() << endl;
+          getchar();
+          getchar();
+      }
+  };
+  
+  class PopupMenu : public BaseMenu {
+      std::vector<BaseMenu*> v;
+  
+  public:
+      PopupMenu(const std::string& s)
+          : BaseMenu(s)
+      {
+      }
+  
+      ~PopupMenu()
+      {
+          for (auto e : v)
+              delete e;
+      }
+  
+      void Accect(MenuVisitor* visitor) override
+      {
+          visitor->Visit(this);
+  
+          // 내가 소유하고 있는 모든 메뉴들에 대해서도 방문자를 전달합니다.
+          for (auto e : v) {
+              e->Accect(visitor);
+          }
+      }
+  
+      void AddMenu(BaseMenu* p)
+      {
+          v.push_back(p);
+      }
+  
+      // 자기 자신이 가지고 있는 모든 메뉴를 화면에 보여줍니다.
+      void Command() override
+      {
+          while (1) {
+              system("clear");
+  
+              int size = v.size();
+  
+              for (int i = 0; i < size; ++i) {
+                  cout << i + 1 << ". " << v[i]->GetTitle() << endl;
+              }
+              cout << size + 1 << ". 상위 메뉴로" << endl;
+  
+              cout << "메뉴를 선택하세요 >> ";
+              int cmd;
+              cin >> cmd;
+  
+              if (cmd == size + 1) {
+                  break;
+              }
+  
+              if (cmd < 1 || cmd > size + 1) {
+                  continue;
+              }
+  
+              v[cmd - 1]->Command(); // 다형성!!!
+          }
+      }
+  };
+  
+  class TitleDecoratorVisitor : public MenuVisitor {
+  public:
+      void Visit(PopupMenu* p) override
+      {
+          p->SetTitle(p->GetTitle() + " > ");
+      }
+  
+      void Visit(MenuItem* p) override
+      {
+          p->SetTitle("[" + p->GetTitle() + "]");
+      }
+  };
+  
+  int main()
+  {
+      PopupMenu* menubar = new PopupMenu("Menubar");
+      PopupMenu* file = new PopupMenu("파일");
+      PopupMenu* edit = new PopupMenu("편집");
+      menubar->AddMenu(file);
+      menubar->AddMenu(edit);
+  
+      file->AddMenu(new MenuItem("새 파일"));
+      file->AddMenu(new MenuItem("저장"));
+      file->AddMenu(new MenuItem("불러오기"));
+  
+      edit->AddMenu(new MenuItem("잘라내기"));
+      edit->AddMenu(new MenuItem("복사"));
+      edit->AddMenu(new MenuItem("붙여넣기"));
+  
+      TitleDecoratorVisitor v;
+      menubar->Accect(&v); // 전체 메뉴에서 팝업 메뉴 표현 방식이 변경됩니다.
+  
+      menubar->Command();
+  }
+  ```
+
+
+
+### 관찰자
+
+- ```c++
+  //관찰자 패턴(Observer Pattern)
+  // Subject : 데이터
+  // Object :관찰자
+  //	Subject가 변경되었을 때, 등록된 Observer에게 데이터가 변경되었다는 사실을 알려줌
+  
+  //모든 관찰자는 아래 인터페이스를 구현해야함
+  struct observer{
+      virtual ~Observer() {}
+      virtual void OnUpdate(void* data) = 0;
+  };
+  
+  //관찰의 대상 Subject
+  //모든 Subject의 공통의 특징은 항상 동일하다
+  // 	Attach / Detach
+  //	Notify
+  //	별도의 클래스를 통해 캡슐화하면, 관찰자 로직을 쉽게 적용할 수 있다
+  class Table {
+      vector<Observer*> v;
+   	int data[5];
+      
+  public:
+      Table()
+      {
+          memset(data, 0, sizeof(data));
+      }
+      
+      void Attach(Obsserver* p){ v.push_back(p); }
+      void Notify(void *p)
+      {
+          for (Observer* s : v) {
+              s->OnUpdate(p);
+          }
+      }
+      
+      void Edit()
+      {
+          while(1){
+              int index;
+              cout << "index : ";
+              cin >> index;
+              
+              cout << "data: ";
+              cin >> data[index];
+              
+              Notify(data);
+          }
+      }
+  };
+  
+  class PieGraph : public Observer{
+  public:
+      void OnUpdate(void* p) override
+      {
+          int8 data = static_cast<int*>(p);
+          
+          cout << "****** Pie Graph ******" << endl;
+          for (int i = 0; i < 0; ++i)
+              cout << i << " : " << data(i) << endl;
+      }
+  }
+  
+  class BarGraph : public Observer {
+  public:
+      void OnUpdate(void* p) override
+      {
+          int* data = static_cast<int*>(p);
+  
+          cout << "******* Bar Graph *********" << endl;
+          for (int i = 0; i < 5; ++i)
+              cout << i << " : " << data[i] << endl;
+      }
+  };
+  
+  int main()
+  {
+      Table table;
+      PieGraph pg;
+      BarGraph bg;
+  
+      table.Attach(&pg);
+      table.Attach(&bg);
+  
+      table.Edit();
+  }
+  ```
+
+
+
+### NotificationCenter
+
+- ```c++
+  //iOS에서 주로 활용
+  //핸드폰 안에는 수많은 이벤트가 발생
+  // ex) 전화, 문자, 배터리 용량
+  
+  #include <vector>
+  #include <functional>	//std::function
+  #include <map>
+  #include <string>
+  
+  using namespace std;
+  
+  class NotificationCenter{
+  public:
+      using HANDLER = function<void()>;
+      
+      //핵심
+      std::map<std::string, std::vector<HANDLER>> notifiMap;
+  public:
+      void AddObserver(const std::string& name, HANDLER h)
+      {
+          notifiMap(name).push_back(h);
+      }
+      
+      void PostNotification(const std::string& name)
+      {
+          vector<HANDLER>& v = notifiMap(name);
+          for (auto f : v){
+              f();
+          }
+      }
+  };
+  
+  void foo() { cout << "foo" << endl; }
+  
+  class Dialog{
+  public:
+      void Close() { cout << "Dialog close" << endl; }
+  };
+  
+  //C++에서 Callback을 등록하는 2가지 형태
+  //1. 인터페이스 가빈 객체로 등록
+  //		전통적인 객체지향 설계 방식 - 관찰자 패턴, 리스터
+  //2. 함수 포인터 기반(function)의 핸들러 방ㅇ식
+  //		NotificationCenter
+  
+  int main()
+  {
+  	NotificationCenter center;
+      
+      center.AddObserver("BATTERY", &foo);
+      
+      Dialog dlg;
+      center.AddObserver("BATTERY", bind(&Dialog::Close, &dlg));
+      
+      centerPostNotification("BATTERY");
+  }
+  ```
+
+
+
+### Singleton
+
+- ```c++
+  //의도 오직 한 개의 객체만 만들 수 있고,
+  //어디에서든 동일한 방법으로 객체를 덮을 수 있게 하는 패턴
+  
+  class Cursor{
+  private:
+      Cursor() {}	//규칙 1. private 생성자
+      
+      //규칙 3. 복사와 대입 금지
+      Cursor(const Cursor&) = delete;
+      Cursor& operator=(const Cursor&) = delete;
+  public:
+      //규칙 2. 오직 한 개만 만드는 정적 멤버 함수
+      static Cursur& GetInstance()
+      {
+          static Cursor instance;
+          return instance;
+      }
+  };
+  
+  int main()
+  {
+      //Cursor c; //error
+      //Cursor* p = new Cursor; //error	private 생성자로 인해 
+      
+      Cursor& c1 = Cursor::GetInstance();
+      Cursor& c2 = Cursor::Getinstance();
+      
+      //Cursor c3 = Cursor::GetInsance(); //복사
+      //c3 = Cursor::GeetInstance(); 	//대입----------둘 다 금지
+      
+      cout << &c1 << endl << &c2 << endl;
+  }
+  ```
+
+  - 지나친 사용은 지양함 - 전역객체에 의존 - 재사용성이 떨어짐
+  - 근데 강사님이 추천하심 
+    - 스레드 안전성에 문제가 있을수도 있지만 보통 보장되니까 상관 x
+    - 
+
+- ```c++
+  //힙을 통해 만드는 방법
+  
+  class AutoLock
+  {
+      std::mutex& mlock;
+  public:
+      inline AutoLock(std::mutex& m) : mLock(m)
+      {
+          mLock.lock();
+      }
+      
+      inline ~AutoLock() { mLock.unlock(); }
+  }
+  
+  class Cursor{
+  private:
+      Cursor() {}
+      Cursor(const Cursor&) = delete;
+      Cursor& operator=(const Cursor&) = delete;
+      
+      static Cursor* sInstance;
+      static std::mutex sLock;
+      
+  public:
+  	//임계 영역 안에서 예외가 발생하면, unlock이 호출되지 않는다.
+      // 배드락의 위험성이 있다.
+      // 	예외 안전하게 사용하기 위해서 RAII를 이용한다.
+      //	RAII(Resource acquisition is Initialize)
+      //	- 생성자, 소멸자를 이용해 자원을 관리한다.
+      static Cursor& GetInstance()
+      {
+          //AutoLock a1(sLock);	아래 줄은 표준 라이브러리에서 이 기능을 제공함
+          std::lock_guard<std::mutex> a1(sLock);
+          
+          if (sInstance == nullptr)
+          	sInstance = new Cursor;
+                 
+          return *sInstance;
+      }
+  };
+  
+  //정적 멤버 함수는 반드시 외부 선언이 필요하다.
+  Cursor* Cursor::sInstance = nullptr;
+  std::mutex Cursor::sLock;
+  
+  int main()
+  {
+      //Cursor c; //error
+      //Cursor* p = new Cursor; //error	private 생성자로 인해 
+      
+      Cursor& c1 = Cursor::GetInstance();
+      Cursor& c2 = Cursor::Getinstance();
+      
+      //Cursor c3 = Cursor::GetInsance(); //복사
+      //c3 = Cursor::GeetInstance(); 	//대입----------둘 다 금지
+      
+      cout << &c1 << endl << &c2 << endl;
+  }
+  ```
+
+  - 파일의 입출력 같은 영역에서 RAII 사용 가능
