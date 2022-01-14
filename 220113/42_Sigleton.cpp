@@ -8,9 +8,12 @@ class Cursor{
 private:
     Cursor() {}	//규칙 1. private 생성자
     
+    //규칙 3. 복사와 대입 금지
+    Cursor(const Cursor&) = delete;
+    Cursor& operator=(const Cursor&) = delete;
 public:
     //규칙 2. 오직 한 개만 만드는 정적 멤버 함수
-    static Cursor& GetInstance()
+    static Cursur& GetInstance()
     {
         static Cursor instance;
         return instance;
@@ -23,7 +26,10 @@ int main()
     //Cursor* p = new Cursor; //error	private 생성자로 인해 
     
     Cursor& c1 = Cursor::GetInstance();
-    Cursor& c2 = Cursor::GetInstance();
+    Cursor& c2 = Cursor::Getinstance();
+    
+    //Cursor c3 = Cursor::GetInsance(); //복사
+    //c3 = Cursor::GeetInstance(); 	//대입----------둘 다 금지
     
     cout << &c1 << endl << &c2 << endl;
 }
